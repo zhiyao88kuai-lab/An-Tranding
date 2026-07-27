@@ -122,6 +122,9 @@ export function ResearchDashboard({ initialReport }: Props) {
       ),
     [report],
   );
+  const generatedAtLabel = `${report.meta.generatedAt
+    .replace("T", " ")
+    .slice(0, 19)} UTC`;
 
   function update<K extends keyof AnalysisRequest>(
     key: K,
@@ -775,11 +778,10 @@ export function ResearchDashboard({ initialReport }: Props) {
               <span>Public Equity Investing workflow</span>
             </div>
             <p>{report.disclaimer}</p>
-            <span>生成于 {new Date(report.meta.generatedAt).toLocaleString()}</span>
+            <span>生成于 {generatedAtLabel}</span>
           </footer>
         </div>
       </section>
     </main>
   );
 }
-
