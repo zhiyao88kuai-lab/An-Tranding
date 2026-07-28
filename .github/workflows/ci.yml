@@ -1,0 +1,55 @@
+name: SignalForge CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      origin:
+        description: Production origin to smoke-test, including https://
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: signalforge-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Use Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Test production build and APIs
+        run: npm test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev
+
+  production-smoke:
+    if: github.event_name == 'workflow_dispatch'
+    needs: quality
+    runs-on: ubuntu-latest
+    env:
+      SMOKE_ORIGIN: ${{ inputs.origin }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Use Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Verify public page and APIs
+        run: node tests/production-smoke.mjs
