@@ -494,10 +494,15 @@ summary {
 
 .suffix-input b {
   position: absolute;
-  right: 12px;
+  right: 38px;
   top: 12px;
   color: var(--faint);
   font-weight: 500;
+  pointer-events: none;
+}
+
+.suffix-input input {
+  padding-right: 58px;
 }
 
 .field-row {

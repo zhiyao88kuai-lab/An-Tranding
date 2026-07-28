@@ -446,9 +446,10 @@ export function ResearchDashboard({ initialReport }: Props) {
                 <div className="suffix-input">
                   <input
                     type="number"
+                    aria-label="仓位比例 %"
                     min="0"
                     max="100"
-                    step="0.5"
+                    step="5"
                     value={request.positionWeight}
                     onChange={(event) =>
                       update("positionWeight", Number(event.target.value))

@@ -72,6 +72,14 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(html, /财报前决策摘要/);
   assert.match(html, /演示报告 · 非实时 · 不可据此交易/);
   assert.doesNotMatch(html, /react-loading-skeleton|codex-preview/);
+
+  const positionWeightInput = html.match(
+    /<input[^>]+aria-label="仓位比例 %"[^>]*>/i,
+  )?.[0];
+  assert.ok(positionWeightInput, "position weight input should be rendered");
+  assert.match(positionWeightInput, /min="0"/i);
+  assert.match(positionWeightInput, /max="100"/i);
+  assert.match(positionWeightInput, /step="5"/i);
 });
 
 test("analysis API applies position-aware risk guidance", async () => {
