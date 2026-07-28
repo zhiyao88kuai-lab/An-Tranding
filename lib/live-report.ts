@@ -1,3 +1,4 @@
+import { makeCatalystCalendar } from "./catalyst-calendar";
 import { makeNvdaDemoReport } from "./demo-report";
 import type {
   NvdaOfficialSnapshot,
@@ -108,6 +109,9 @@ export function makeNvdaLiveScreenReport(
     : market.lastClose * 0.75;
   const hasEventOptions = Boolean(positioning?.options?.eventIsolated);
   const hasShortVolume = Boolean(positioning?.shortVolume);
+  const catalystCalendar = makeCatalystCalendar(
+    positioning?.options?.eventDate,
+  );
   const revenueConsensusGap =
     "收入卖方一致预期/买方高端门槛仍需授权数据源；当前以公司 $91.0B±2% 指引作为已验证反应基准，不把它冒充一致预期。";
 
@@ -373,25 +377,25 @@ export function makeNvdaLiveScreenReport(
   ];
   report.catalysts = [
     {
-      timing: "即日起至 T-7",
+      timing: catalystCalendar.preEventWindow,
       event: "云厂商 Capex、网络与供应链读数",
       impact: "two-sided",
       watch: "AI 基础设施投入斜率、机架部署速度、HBM/封装与网络配套。",
     },
     {
-      timing: positioning?.options?.eventDate || "2026-08-26",
+      timing: catalystCalendar.earningsCall,
       event: `${official.outlookPeriod} 财报与下一季指引`,
       impact: "two-sided",
       watch: `收入相对 ${moneyB(guideHigh)} 高端、数据中心结构、毛利率区间和中国口径。`,
     },
     {
-      timing: "T+1 至 T+2",
+      timing: catalystCalendar.modelResetWindow,
       event: "电话会与卖方模型重置",
       impact: "two-sided",
       watch: `${fy2?.fiscalEnd || "远期"} EPS 修正幅度与目标倍数变化。`,
     },
     {
-      timing: "随后 4–8 周",
+      timing: catalystCalendar.deliveryWindow,
       event: "平台交付、客户产品发布与 Rubin 时间表",
       impact: "positive",
       watch: "财报后的订单可见度能否支撑估值消化。",

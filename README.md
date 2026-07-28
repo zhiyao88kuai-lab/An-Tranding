@@ -66,6 +66,8 @@ npx vercel@latest deploy --prod
   当前接入 EPS 一致预期，不包含收入一致预期。
 - `NVDA_NEXT_EARNINGS_DATE`：NVIDIA 下一次官方财报日期；事件期权适配器会在
   日期过期后自动失效，避免错误地把普通到期波动标成财报隐含波动。
+- `NVDA_NEXT_EARNINGS_CALL_UTC`：官方电话会 UTC 时间；系统据此同时显示
+  太平洋时间和北京时间，并计算财报前后催化剂的明确日期区间。
 
 不要将 `VIBE_MCP_AUTH_TOKEN`、SSH 私钥或任何本机凭据写入源码或
 `NEXT_PUBLIC_*` 环境变量。

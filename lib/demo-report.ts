@@ -1,3 +1,4 @@
+import { makeCatalystCalendar } from "./catalyst-calendar";
 import type { AnalysisRequest, ResearchReport } from "./types";
 
 function positionGuidance(input: AnalysisRequest): string {
@@ -21,6 +22,7 @@ export function makeNvdaDemoReport(
   extraSources: ResearchReport["sources"] = [],
 ): ResearchReport {
   const generatedAt = new Date().toISOString();
+  const catalystCalendar = makeCatalystCalendar();
 
   return {
     meta: {
@@ -218,25 +220,25 @@ export function makeNvdaDemoReport(
     ],
     catalysts: [
       {
-        timing: "T-14 至 T-3",
+        timing: catalystCalendar.preEventWindow,
         event: "云厂商 Capex 与供应链读数",
         impact: "two-sided",
         watch: "订单斜率、交付周期、网络配套与机架部署。",
       },
       {
-        timing: "T0",
+        timing: catalystCalendar.earningsCall,
         event: "财报与下一季指引",
         impact: "two-sided",
         watch: "数据中心收入、毛利率区间、产品切换与需求可见度。",
       },
       {
-        timing: "T+1",
+        timing: catalystCalendar.modelResetWindow,
         event: "电话会与卖方模型重置",
         impact: "two-sided",
         watch: "高端预期是否上移，以及 FY2 EPS 上修幅度。",
       },
       {
-        timing: "随后 4–8 周",
+        timing: catalystCalendar.deliveryWindow,
         event: "平台交付与客户产品发布",
         impact: "positive",
         watch: "兑现节奏是否支持财报后的估值消化。",

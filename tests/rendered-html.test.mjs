@@ -78,6 +78,13 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(html, /创建分析任务/);
   assert.match(html, /财报前决策摘要/);
   assert.match(html, /演示报告 · 非实时 · 不可据此交易/);
+  assert.match(html, /2026-08-12 至 2026-08-23/);
+  assert.match(
+    html,
+    /2026-08-26 14:00 PT \/ 2026-08-27 05:00 北京/,
+  );
+  assert.match(html, /2026-08-27 至 2026-08-28/);
+  assert.match(html, /2026-09-23 至 2026-10-21/);
   assert.doesNotMatch(html, /react-loading-skeleton|codex-preview/);
 
   const positionWeightInput = html.match(
