@@ -83,8 +83,13 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(html, /<title>SignalForge · 财报前研究决策台<\/title>/i);
   assert.match(html, /把财报噪音/);
   assert.match(html, /创建分析任务/);
-  assert.match(html, /财报前决策摘要/);
-  assert.match(html, /演示报告 · 非实时 · 不可据此交易/);
+  assert.match(html, /等待实时证据分析/);
+  assert.doesNotMatch(html, /财报前决策摘要/);
+  assert.doesNotMatch(html, /一致预期与财报门槛/);
+  assert.doesNotMatch(html, /最可能推动股价的核心 KPI/);
+  assert.doesNotMatch(html, /情景估值与概率偏度/);
+  assert.doesNotMatch(html, /催化剂时间轴/);
+  assert.doesNotMatch(html, /管理层必问问题/);
   const symbolInput = html.match(
     /<input[^>]+placeholder="例如 NVDA \/ 00700 \/ 600519"[^>]*>/i,
   )?.[0];
@@ -95,13 +100,7 @@ test("server-renders the finished research cockpit", async () => {
   assert.ok(companyInput, "company name input should be rendered");
   assert.match(symbolInput, /value=""/i);
   assert.match(companyInput, /value=""/i);
-  assert.match(html, /2026-08-12 至 2026-08-23/);
-  assert.match(
-    html,
-    /2026-08-26 14:00 PT \/ 2026-08-27 05:00 北京/,
-  );
-  assert.match(html, /2026-08-27 至 2026-08-28/);
-  assert.match(html, /2026-09-23 至 2026-10-21/);
+  assert.doesNotMatch(html, /2026-08-26 14:00 PT/);
   assert.doesNotMatch(html, /react-loading-skeleton|codex-preview/);
 
   const positionWeightInput = html.match(

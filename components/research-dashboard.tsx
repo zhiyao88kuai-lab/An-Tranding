@@ -20,10 +20,6 @@ import type {
   RiskTolerance,
 } from "../lib/types";
 
-type Props = {
-  initialReport: ResearchReport;
-};
-
 type HealthState = {
   state: "checking" | "ready" | "limited" | "error";
   liveReady: boolean;
@@ -125,8 +121,8 @@ function SectionTitle({
   );
 }
 
-export function ResearchDashboard({ initialReport }: Props) {
-  const [report, setReport] = useState(initialReport);
+export function ResearchDashboard() {
+  const [report, setReport] = useState<ResearchReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -158,27 +154,27 @@ export function ResearchDashboard({ initialReport }: Props) {
 
   const weightedReturn = useMemo(
     () =>
-      report.scenarios.reduce(
+      report?.scenarios.reduce(
         (sum, scenario) =>
           sum + (scenario.probability / 100) * scenario.returnPct,
         0,
-      ),
+      ) ?? 0,
     [report],
   );
-  const generatedAtLabel = `${report.meta.generatedAt
-    .replace("T", " ")
-    .slice(0, 19)} UTC`;
+  const generatedAtLabel = report
+    ? `${report.meta.generatedAt.replace("T", " ").slice(0, 19)} UTC`
+    : "";
   const expectationPeriodLabels =
-    report.meta.expectationPeriodLabels ||
-    (report.meta.liveDataReady
+    report?.meta.expectationPeriodLabels ||
+    (report?.meta.liveDataReady
       ? ["本季", "下季", "FY1", "FY2"]
       : ["本期 t", "上季 t-1", "去年 t-4", "两年前 t-8"]);
   const progressPercent = Math.round(
     (Object.keys(progress).length / analysisStages.length) * 100,
   );
   const evidenceReadiness =
-    report.meta.evidenceReadiness ||
-    (report.meta.liveDataReady ? "complete" : "insufficient");
+    report?.meta.evidenceReadiness ||
+    (report?.meta.liveDataReady ? "complete" : "insufficient");
   const isCnRequest =
     request.market === "CN" ||
     (request.market === "AUTO" &&
@@ -730,7 +726,30 @@ export function ResearchDashboard({ initialReport }: Props) {
             </section>
           ) : null}
 
-          <section
+          {runState === "idle" || runState === "error" ? (
+            <section className="empty-report-state" aria-live="polite">
+              <div className="empty-orbit" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
+              <span>READY FOR RESEARCH</span>
+              <h2>
+                {runState === "error"
+                  ? "本次分析未生成报告"
+                  : "等待实时证据分析"}
+              </h2>
+              <p>
+                {runState === "error"
+                  ? "请根据左侧错误提示检查股票代码或数据模式后重新提交。"
+                  : "输入股票代码并点击“运行实时证据分析”，完成取数与证据校验后将在这里展示完整报告。"}
+              </p>
+            </section>
+          ) : null}
+
+          {runState === "complete" && report ? (
+            <>
+              <section
             className={`report-disclosure ${
               evidenceReadiness === "complete"
                 ? "ready"
@@ -756,9 +775,11 @@ export function ResearchDashboard({ initialReport }: Props) {
                 ? `新的 ${runSymbol} 分析仍在进行，完成前不会覆盖当前内容。`
                 : report.meta.dataDisclosure}
             </p>
-          </section>
+              </section>
 
-          <section className={`decision-card decision-${report.decision.side}`}>
+              <section
+                className={`decision-card decision-${report.decision.side}`}
+              >
             <div className="decision-head">
               <div>
                 <div className="report-kicker">
@@ -806,7 +827,7 @@ export function ResearchDashboard({ initialReport }: Props) {
                 <p>{report.decision.invalidation}</p>
               </div>
             </div>
-          </section>
+              </section>
 
           <div className="tape-grid">
             {report.tape.map((item, index) => (
@@ -1141,14 +1162,16 @@ export function ResearchDashboard({ initialReport }: Props) {
             </div>
           </section>
 
-          <footer>
-            <div>
-              <strong>SignalForge</strong>
-              <span>Public Equity Investing workflow</span>
-            </div>
-            <p>{report.disclaimer}</p>
-            <span>生成于 {generatedAtLabel}</span>
-          </footer>
+              <footer>
+                <div>
+                  <strong>SignalForge</strong>
+                  <span>Public Equity Investing workflow</span>
+                </div>
+                <p>{report.disclaimer}</p>
+                <span>生成于 {generatedAtLabel}</span>
+              </footer>
+            </>
+          ) : null}
         </div>
       </section>
     </main>
