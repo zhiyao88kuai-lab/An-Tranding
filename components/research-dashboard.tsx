@@ -28,6 +28,7 @@ type Props = {
 type HealthState = {
   state: "checking" | "ready" | "limited" | "error";
   liveReady: boolean;
+  privateReady: boolean;
   disclosure: string;
 };
 
@@ -141,6 +142,7 @@ export function ResearchDashboard({ initialReport }: Props) {
   const [health, setHealth] = useState<HealthState>({
     state: "checking",
     liveReady: false,
+    privateReady: false,
     disclosure: "正在检查实时数据链路…",
   });
   const [request, setRequest] = useState<AnalysisRequest>({
@@ -179,15 +181,21 @@ export function ResearchDashboard({ initialReport }: Props) {
   const evidenceReadiness =
     report.meta.evidenceReadiness ||
     (report.meta.liveDataReady ? "complete" : "insufficient");
+  const selectedModeReady =
+    request.dataMode === "LOCAL_RESEARCH"
+      ? health.privateReady
+      : health.liveReady;
   const selectedModeDisclosure =
     request.dataMode === "DEMO"
       ? "演示模式不会请求当前行情或实时一致预期；输出仅用于查看系统结构。"
       : request.dataMode === "LOCAL_RESEARCH"
-        ? health.liveReady
+        ? health.privateReady
           ? "本机实施链路已就绪：SSH 隧道、dev0 MCP 与 EPS 一致预期均可达；仍会按证据完整性决定是否输出方向。"
-          : "本机实施链路尚未全部就绪；缺失连接会明确显示，结果会安全降级为 WAIT。"
+          : health.liveReady
+            ? "公开证据链可用，但 dev0 私有 MCP 尚未连接；系统会保留公开数据并明确标记私有增强缺口。"
+            : "本机实施链路尚未全部就绪；缺失连接会明确显示，结果会安全降级为 WAIT。"
         : health.liveReady
-          ? "公开数据源与私有 MCP 实施链路均已连接；系统会冻结证据并按门槛决定方向。"
+          ? "公开实施链路已就绪：SEC 公司事实、行情与 EPS 一致预期可达；dev0 私有 MCP 是可选增强项。"
           : "公开源或私有 MCP 尚有缺口；系统会显示连接证据并安全降级为 WAIT。";
 
   useEffect(() => {
@@ -196,16 +204,23 @@ export function ResearchDashboard({ initialReport }: Props) {
       .then(async (response) => {
         if (!response.ok) throw new Error("健康检查失败");
         return (await response.json()) as {
-          capabilities?: { liveReady?: boolean };
+          capabilities?: {
+            liveReady?: boolean;
+            privateEnrichmentReady?: boolean;
+          };
           disclosure?: string;
         };
       })
       .then((payload) => {
         if (!active) return;
         const liveReady = Boolean(payload.capabilities?.liveReady);
+        const privateReady = Boolean(
+          payload.capabilities?.privateEnrichmentReady,
+        );
         setHealth({
           state: liveReady ? "ready" : "limited",
           liveReady,
+          privateReady,
           disclosure:
             payload.disclosure ||
             (liveReady ? "实时链路已就绪。" : "实时链路未就绪。"),
@@ -216,6 +231,7 @@ export function ResearchDashboard({ initialReport }: Props) {
         setHealth({
           state: "error",
           liveReady: false,
+          privateReady: false,
           disclosure: "无法确认实时数据链路，系统将按非实时模式处理。",
         });
       });
@@ -609,7 +625,7 @@ export function ResearchDashboard({ initialReport }: Props) {
 
             <div
               className={`mode-disclosure ${
-                request.dataMode === "DEMO" || !health.liveReady
+                request.dataMode === "DEMO" || !selectedModeReady
                   ? "limited"
                   : "ready"
               }`}
@@ -617,7 +633,7 @@ export function ResearchDashboard({ initialReport }: Props) {
               <strong>
                 {request.dataMode === "DEMO"
                   ? "非实时"
-                  : health.liveReady
+                  : selectedModeReady
                     ? "实施链路已就绪"
                     : "实施链路未就绪"}
               </strong>
