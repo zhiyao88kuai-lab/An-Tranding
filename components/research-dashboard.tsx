@@ -165,9 +165,11 @@ export function ResearchDashboard({ initialReport }: Props) {
   const generatedAtLabel = `${report.meta.generatedAt
     .replace("T", " ")
     .slice(0, 19)} UTC`;
-  const expectationPeriodLabels = report.meta.liveDataReady
-    ? ["本季", "下季", "FY1", "FY2"]
-    : ["本期 t", "上季 t-1", "去年 t-4", "两年前 t-8"];
+  const expectationPeriodLabels =
+    report.meta.expectationPeriodLabels ||
+    (report.meta.liveDataReady
+      ? ["本季", "下季", "FY1", "FY2"]
+      : ["本期 t", "上季 t-1", "去年 t-4", "两年前 t-8"]);
   const progressPercent = Math.round(
     (Object.keys(progress).length / analysisStages.length) * 100,
   );

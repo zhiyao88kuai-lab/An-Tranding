@@ -150,17 +150,17 @@ export async function callVibeTool(
   return parsed;
 }
 
-export async function probeVibeMcp(): Promise<SourceRecord> {
+export async function probeVibeMcp(symbol = "NVDA"): Promise<SourceRecord> {
   const now = new Date().toISOString();
   try {
-    await callVibeTool("search_symbol", { query: "NVDA" });
+    await callVibeTool("search_symbol", { query: symbol });
     return {
       name: "vibe_trading_dev0",
       provider: "SSH tunnel + HTTP MCP",
       status: "connected",
       asOf: now,
       tier: "LOCAL",
-      note: "只读工具白名单已连接。",
+      note: `只读工具白名单已连接，并完成 ${symbol} 符号解析。`,
     };
   } catch (error) {
     return {
@@ -170,6 +170,56 @@ export async function probeVibeMcp(): Promise<SourceRecord> {
       asOf: now,
       tier: "LOCAL",
       note: error instanceof Error ? error.message : "连接失败",
+    };
+  }
+}
+
+export async function probeVibeCompanyEvidence(
+  symbol: string,
+  market: "US" | "HK" | "CN",
+): Promise<SourceRecord> {
+  const now = new Date().toISOString();
+  const suffix = market === "US" ? "US" : market === "HK" ? "HK" : "";
+  const code = symbol.includes(".")
+    ? symbol
+    : suffix
+      ? `${symbol}.${suffix}`
+      : symbol;
+  try {
+    const payload = (await callVibeTool("get_financial_statements", {
+      code,
+      period: "quarter",
+      statement: "income",
+    })) as Record<string, unknown>;
+    const root =
+      payload &&
+      typeof payload === "object" &&
+      "data" in payload &&
+      payload.data &&
+      typeof payload.data === "object"
+        ? (payload.data as Record<string, unknown>)
+        : payload;
+    const company = root?.[code] as Record<string, unknown> | undefined;
+    const periods = Array.isArray(company?.periods)
+      ? company.periods.length
+      : 0;
+    if (periods < 1) throw new Error("MCP financial statements are incomplete");
+    return {
+      name: "vibe_trading_dev0 financial cross-check",
+      provider: "SSH tunnel + HTTP MCP",
+      status: "connected",
+      asOf: now,
+      tier: "LOCAL",
+      note: `已读取 ${code} 的 ${periods} 条财务记录用于交叉验证；SEC 累计值与比较期由主链路统一去重。`,
+    };
+  } catch (error) {
+    return {
+      name: "vibe_trading_dev0 financial cross-check",
+      provider: "SSH tunnel + HTTP MCP",
+      status: "missing",
+      asOf: now,
+      tier: "LOCAL",
+      note: error instanceof Error ? error.message : "财务交叉验证失败",
     };
   }
 }

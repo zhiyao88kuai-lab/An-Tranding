@@ -549,12 +549,15 @@ export type NvdaPositioningSnapshot = {
   gaps: string[];
 };
 
-export async function fetchNvdaPositioning(
+export type UsPositioningSnapshot = NvdaPositioningSnapshot;
+
+export async function fetchUsPositioning(
   symbol: string,
   spot: number,
+  eventDate?: string,
 ): Promise<NvdaPositioningSnapshot> {
   const [options, shortVolume] = await Promise.allSettled([
-    fetchNasdaqEventOptions(symbol, spot),
+    fetchNasdaqEventOptions(symbol, spot, eventDate),
     fetchFinraShortVolume(symbol),
   ]);
   const sources: SourceRecord[] = [];
@@ -598,4 +601,15 @@ export async function fetchNvdaPositioning(
     sources,
     gaps,
   };
+}
+
+export async function fetchNvdaPositioning(
+  symbol: string,
+  spot: number,
+): Promise<NvdaPositioningSnapshot> {
+  return fetchUsPositioning(
+    symbol,
+    spot,
+    process.env.NVDA_NEXT_EARNINGS_DATE || "2026-08-26",
+  );
 }

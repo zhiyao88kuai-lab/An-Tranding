@@ -73,6 +73,7 @@ export interface ResearchReport {
     freezeTime: string;
     dataMode: DataMode;
     workflow: string[];
+    expectationPeriodLabels?: [string, string, string, string];
     isDemo: boolean;
     liveDataReady: boolean;
     dataDisclosure: string;

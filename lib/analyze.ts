@@ -1,9 +1,11 @@
 import { makeConditionalReport, makeNvdaDemoReport } from "./demo-report";
+import { makeGenericUsLiveReport } from "./generic-live-report";
 import { makeNvdaLiveScreenReport } from "./live-report";
 import {
   fetchNasdaqMarketSnapshot,
   fetchNvdaOfficialSnapshot,
   fetchNvdaPositioning,
+  fetchUsPositioning,
   type NvdaOfficialSnapshot,
   type NvdaPositioningSnapshot,
 } from "./providers/nvda-evidence";
@@ -13,7 +15,12 @@ import {
 } from "./providers/nasdaq-consensus";
 import { inferMarket, probeOfficialSource } from "./providers/official-data";
 import {
+  fetchUsCompanyEvidence,
+  type UsCompanyEvidence,
+} from "./providers/us-company-evidence";
+import {
   fetchVibeMarketSnapshot,
+  probeVibeCompanyEvidence,
   probeVibeMcp,
   type MarketSnapshot,
 } from "./providers/vibe-mcp";
@@ -85,6 +92,7 @@ export async function analyzeEquity(
   let consensus: ConsensusSnapshot | undefined;
   let marketSnapshot: MarketSnapshot | undefined;
   let officialSnapshot: NvdaOfficialSnapshot | undefined;
+  let companyEvidence: UsCompanyEvidence | undefined;
   let positioning: NvdaPositioningSnapshot | undefined;
 
   reportProgress({
@@ -106,11 +114,11 @@ export async function analyzeEquity(
     });
     const [official, vibe] = await Promise.all([
       probeOfficialSource(input.symbol, market),
-      probeVibeMcp(),
+      probeVibeMcp(input.symbol),
     ]);
     sources.push(official, vibe);
 
-    if (market === "US" && input.symbol === "NVDA") {
+    if (market === "US") {
       const marketPromise =
         input.dataMode === "LOCAL_RESEARCH"
           ? fetchVibeMarketSnapshot(input.symbol).catch(async () => {
@@ -122,12 +130,31 @@ export async function analyzeEquity(
               sources.push(snapshot.source);
               return snapshot;
             });
-      const [consensusResult, marketResult, officialResult] =
+      const officialPromise =
+        input.symbol === "NVDA"
+          ? fetchNvdaOfficialSnapshot()
+          : fetchUsCompanyEvidence(input.symbol);
+      const crossCheckPromise =
+        input.dataMode === "LOCAL_RESEARCH"
+          ? probeVibeCompanyEvidence(input.symbol, "US")
+          : Promise.resolve<SourceRecord>({
+              name: "vibe_trading_dev0 financial cross-check",
+              provider: "SSH tunnel + HTTP MCP",
+              status: "restricted",
+              asOf: new Date().toISOString(),
+              tier: "LOCAL",
+              note: "公开部署不访问本机 SSH 隧道；切换本机实施链路后启用财务交叉验证。",
+            });
+      const [consensusResult, marketResult, officialResult, crossCheckResult] =
         await Promise.allSettled([
-        fetchNasdaqConsensus(input.symbol),
-        marketPromise,
-        fetchNvdaOfficialSnapshot(),
-      ]);
+          fetchNasdaqConsensus(input.symbol),
+          marketPromise,
+          officialPromise,
+          crossCheckPromise,
+        ]);
+      if (crossCheckResult.status === "fulfilled") {
+        sources.push(crossCheckResult.value);
+      }
       if (consensusResult.status === "fulfilled") {
         consensus = consensusResult.value;
         sources.push(consensus.source);
@@ -161,11 +188,16 @@ export async function analyzeEquity(
         }`;
       }
       if (officialResult.status === "fulfilled") {
-        officialSnapshot = officialResult.value;
-        sources.push(officialSnapshot.source);
+        if (input.symbol === "NVDA") {
+          officialSnapshot = officialResult.value as NvdaOfficialSnapshot;
+          sources.push(officialSnapshot.source);
+        } else {
+          companyEvidence = officialResult.value as UsCompanyEvidence;
+          sources.push(companyEvidence.source);
+        }
       } else {
         sources.push({
-          name: "NVIDIA reported results & outlook",
+          name: `${input.symbol} reported results & outlook`,
           provider: "SEC EDGAR earnings exhibit · global-stock-data",
           status: "missing",
           asOf: new Date().toISOString(),
@@ -177,10 +209,17 @@ export async function analyzeEquity(
         });
       }
       if (marketSnapshot) {
-        positioning = await fetchNvdaPositioning(
-          input.symbol,
-          marketSnapshot.lastClose,
-        );
+        positioning =
+          input.symbol === "NVDA"
+            ? await fetchNvdaPositioning(
+                input.symbol,
+                marketSnapshot.lastClose,
+              )
+            : await fetchUsPositioning(
+                input.symbol,
+                marketSnapshot.lastClose,
+                companyEvidence?.estimatedNextEarningsDate,
+              );
         sources.push(...positioning.sources);
       }
     }
@@ -260,6 +299,41 @@ export async function analyzeEquity(
       consensus,
       marketSnapshot,
       officialSnapshot,
+      positioning,
+      sources,
+    );
+  }
+
+  if (
+    market === "US" &&
+    input.symbol !== "NVDA" &&
+    input.dataMode !== "DEMO" &&
+    consensus &&
+    marketSnapshot &&
+    companyEvidence
+  ) {
+    reportProgress({
+      stage: "evidence",
+      status: companyEvidence.guidance ? "done" : "warning",
+      message: `${input.symbol} 的 SEC 单季财务、一致预期与行情已冻结`,
+      detail: `${companyEvidence.periods.length} 个单季事实已去重；${
+        companyEvidence.guidance
+          ? `${companyEvidence.guidance.period} 公司指引已提取`
+          : "公司指引未结构化，历史实际值与 EPS 一致预期仍可用于建模"
+      }。`,
+    });
+    reportProgress({
+      stage: "scenarios",
+      status: "done",
+      message: "已完成 KPI、毛利率争议与 Bull / Base / Bear 情景",
+      detail:
+        "目标价由远期 EPS、一致预期修正和显式倍数假设计算；缺口单列，不再返回空报告。",
+    });
+    return makeGenericUsLiveReport(
+      input,
+      consensus,
+      marketSnapshot,
+      companyEvidence,
       positioning,
       sources,
     );
