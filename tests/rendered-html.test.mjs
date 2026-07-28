@@ -80,6 +80,8 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(positionWeightInput, /min="0"/i);
   assert.match(positionWeightInput, /max="100"/i);
   assert.match(positionWeightInput, /step="5"/i);
+  assert.match(html, /aria-label="仓位比例增加 5%"/i);
+  assert.match(html, /aria-label="仓位比例减少 5%"/i);
 });
 
 test("analysis API applies position-aware risk guidance", async () => {

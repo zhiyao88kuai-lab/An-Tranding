@@ -426,7 +426,8 @@ summary {
   margin-bottom: 18px;
 }
 
-.field > span {
+.field > span,
+.field > label {
   color: var(--muted);
   font-size: 11px;
 }
@@ -492,17 +493,63 @@ summary {
   text-transform: uppercase;
 }
 
-.suffix-input b {
+.percent-suffix {
   position: absolute;
   right: 38px;
-  top: 12px;
+  top: 50%;
+  transform: translateY(-50%);
   color: var(--faint);
   font-weight: 500;
   pointer-events: none;
 }
 
-.suffix-input input {
-  padding-right: 58px;
+.position-weight-input input {
+  padding-right: 72px;
+  appearance: textfield;
+}
+
+.position-weight-input input::-webkit-inner-spin-button,
+.position-weight-input input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.position-weight-stepper {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  bottom: 1px;
+  width: 28px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  border-left: 1px solid var(--line);
+}
+
+.position-weight-stepper button {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  color: var(--muted);
+  background: rgba(14, 32, 47, 0.96);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.position-weight-stepper button:first-child {
+  border-bottom: 1px solid var(--line);
+}
+
+.position-weight-stepper button:hover:not(:disabled),
+.position-weight-stepper button:focus-visible {
+  color: var(--signal);
+  background: rgba(57, 214, 189, 0.12);
+  outline: none;
+}
+
+.position-weight-stepper button:disabled {
+  color: rgba(126, 148, 165, 0.28);
+  cursor: not-allowed;
 }
 
 .field-row {

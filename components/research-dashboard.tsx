@@ -220,6 +220,13 @@ export function ResearchDashboard({ initialReport }: Props) {
     setRequest((current) => ({ ...current, [key]: value }));
   }
 
+  function adjustPositionWeight(delta: number) {
+    update(
+      "positionWeight",
+      Math.min(100, Math.max(0, request.positionWeight + delta)),
+    );
+  }
+
   async function runAnalysis(event: FormEvent) {
     event.preventDefault();
     const startedAt = Date.now();
@@ -441,10 +448,11 @@ export function ResearchDashboard({ initialReport }: Props) {
             </div>
 
             <div className="field-row">
-              <label className="field">
-                <span>仓位比例</span>
-                <div className="suffix-input">
+              <div className="field">
+                <label htmlFor="position-weight">仓位比例</label>
+                <div className="suffix-input position-weight-input">
                   <input
+                    id="position-weight"
                     type="number"
                     aria-label="仓位比例 %"
                     min="0"
@@ -452,12 +460,50 @@ export function ResearchDashboard({ initialReport }: Props) {
                     step="5"
                     value={request.positionWeight}
                     onChange={(event) =>
-                      update("positionWeight", Number(event.target.value))
+                      update(
+                        "positionWeight",
+                        Math.min(
+                          100,
+                          Math.max(0, Number(event.target.value) || 0),
+                        ),
+                      )
                     }
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowUp") {
+                        event.preventDefault();
+                        adjustPositionWeight(5);
+                      } else if (event.key === "ArrowDown") {
+                        event.preventDefault();
+                        adjustPositionWeight(-5);
+                      }
+                    }}
                   />
-                  <b>%</b>
+                  <span className="percent-suffix" aria-hidden="true">
+                    %
+                  </span>
+                  <div
+                    className="position-weight-stepper"
+                    aria-label="调整仓位比例"
+                  >
+                    <button
+                      type="button"
+                      aria-label="仓位比例增加 5%"
+                      onClick={() => adjustPositionWeight(5)}
+                      disabled={request.positionWeight >= 100}
+                    >
+                      ▲
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="仓位比例减少 5%"
+                      onClick={() => adjustPositionWeight(-5)}
+                      disabled={request.positionWeight <= 0}
+                    >
+                      ▼
+                    </button>
+                  </div>
                 </div>
-              </label>
+              </div>
               <label className="field">
                 <span>持仓成本</span>
                 <input
