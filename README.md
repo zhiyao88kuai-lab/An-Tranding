@@ -8,8 +8,8 @@ SignalForge 是一个可运行的一键财报前研究系统：前端收集股�
 
 - `NVDA + DEMO`：展示完整研究报告样例，所有数值明确标记为非实时。
 - 其他股票或证据不足：自动降级为 `WAIT / screen-grade`，不会伪造一致预期或目标价。
-- `OFFICIAL`：验证 SEC 等官方源和本机 MCP 的连接状态，不代表已经完成实时分析。
-- `LOCAL_RESEARCH`：验证本机 SSH 隧道/MCP，并为个人研究数据保留适配位置；当前尚未接入可用于生产的实时一致预期。
+- `OFFICIAL`：冻结 SEC、Nasdaq EPS 一致预期与 dev0 MCP 的连接证据；关键 KPI 不足时自动降级为 `WAIT`。
+- `LOCAL_RESEARCH`：通过本机 SSH 隧道调用 dev0 的只读 HTTP MCP，并与 Nasdaq EPS 一致预期形成可验证的实时实施链路。
 - 页面会显示请求校验、市场路由、数据源、证据门槛、情景与报告生成的真实后端进度；演示模式会明确显示“未请求实时数据”。
 - 做空必须补齐借券成本、利用率、拥挤度和挤压风险，缺一则不能标记为 `implementation-ready`。
 
@@ -50,15 +50,16 @@ npx vercel@latest deploy --prod
 `ERR_CONNECTION_RESET`，应给项目绑定自有域名；这属于域名/网络可达性问题，
 不是 Next.js 应用或 API 故障。
 
-公网环境默认保持 `DEMO`，不配置 `VIBE_MCP_URL`。Vercel 无法访问本机
-`127.0.0.1` 上的 SSH 隧道；需要私有数据时，应在本机运行系统，或另行部署带身份认证、
-访问控制和只读工具白名单的私有 MCP 网关。
+公网环境默认保持 `DEMO`。Vercel 无法访问本机 `127.0.0.1` 上的 SSH
+隧道；生产实时模式需要 Cloudflare Tunnel + Access 服务令牌，把 Vercel
+服务端安全连接至仍只监听 dev0 回环地址的 MCP。不得公开暴露 MCP。
 
 可在 Vercel 中设置以下服务端环境变量：
 
 - `DATA_MODE=DEMO`：安全默认值。
 - `SEC_USER_AGENT`：仅在启用官方 SEC 连接探测时设置真实联系信息。
-- `CONSENSUS_PROVIDER_URL`：预留的一致预期服务地址；当前未完成生产接入。
+- `CONSENSUS_PROVIDER_URL`：可选；默认使用 Nasdaq analyst forecast API，
+  当前接入 EPS 一致预期，不包含收入一致预期。
 
 不要将 `VIBE_MCP_AUTH_TOKEN`、SSH 私钥或任何本机凭据写入源码或
 `NEXT_PUBLIC_*` 环境变量。
@@ -75,7 +76,7 @@ VIBE_SSH_TARGET=dev0 ./scripts/start-vibe-tunnel.sh
 
 ```bash
 ssh -N -T \
-  -L 127.0.0.1:18789:127.0.0.1:8787 \
+  -L 127.0.0.1:18900:127.0.0.1:8900 \
   -o ExitOnForwardFailure=yes \
   -o ServerAliveInterval=30 \
   -o ServerAliveCountMax=3 \
@@ -86,7 +87,7 @@ ssh -N -T \
 然后在 `.env.local` 中设置：
 
 ```dotenv
-VIBE_MCP_URL=http://127.0.0.1:18789/mcp
+VIBE_MCP_URL=http://127.0.0.1:18900/mcp
 ```
 
 安全设计：
@@ -133,7 +134,7 @@ flowchart LR
 
 ## 生产化下一步
 
-- 接入有授权的一致预期源，并保存每次冻结快照。
+- 补充有授权的收入一致预期源，并持久化每次冻结快照。
 - 为公司 KPI 建立可配置 schema，而不是用通用指标硬套。
 - 加入用户认证、任务队列、报告历史和审计日志。
 - 如需对外商业使用，先完成所有行情、期权、研报与门户数据的许可证核查。

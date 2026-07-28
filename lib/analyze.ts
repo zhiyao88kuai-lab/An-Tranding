@@ -1,6 +1,15 @@
 import { makeConditionalReport, makeNvdaDemoReport } from "./demo-report";
+import { makeNvdaLiveScreenReport } from "./live-report";
+import {
+  fetchNasdaqConsensus,
+  type ConsensusSnapshot,
+} from "./providers/nasdaq-consensus";
 import { inferMarket, probeOfficialSource } from "./providers/official-data";
-import { probeVibeMcp } from "./providers/vibe-mcp";
+import {
+  fetchVibeMarketSnapshot,
+  probeVibeMcp,
+  type MarketSnapshot,
+} from "./providers/vibe-mcp";
 import type {
   AnalysisProgressUpdate,
   AnalysisRequest,
@@ -66,6 +75,8 @@ export async function analyzeEquity(
 ): Promise<ResearchReport> {
   const market = inferMarket(input.symbol, input.market);
   const sources: SourceRecord[] = [];
+  let consensus: ConsensusSnapshot | undefined;
+  let marketSnapshot: MarketSnapshot | undefined;
 
   reportProgress({
     stage: "route",
@@ -89,6 +100,44 @@ export async function analyzeEquity(
       probeVibeMcp(),
     ]);
     sources.push(official, vibe);
+
+    if (market === "US" && input.symbol === "NVDA") {
+      const [consensusResult, marketResult] = await Promise.allSettled([
+        fetchNasdaqConsensus(input.symbol),
+        fetchVibeMarketSnapshot(input.symbol),
+      ]);
+      if (consensusResult.status === "fulfilled") {
+        consensus = consensusResult.value;
+        sources.push(consensus.source);
+      } else {
+        sources.push({
+          name: "Analyst EPS consensus",
+          provider: "Nasdaq analyst forecast API",
+          status: "missing",
+          asOf: new Date().toISOString(),
+          tier: "A",
+          note:
+            consensusResult.reason instanceof Error
+              ? consensusResult.reason.message
+              : "一致预期连接失败",
+        });
+      }
+      if (marketResult.status === "fulfilled") {
+        marketSnapshot = marketResult.value;
+        vibe.status = "connected";
+        vibe.asOf = marketSnapshot.asOf;
+        vibe.note = `已验证 ${marketSnapshot.bars} 条只读日线行情。`;
+      } else {
+        vibe.note = `${
+          vibe.status === "connected" ? "MCP 基础连接正常；" : ""
+        }行情快照失败：${
+          marketResult.reason instanceof Error
+            ? marketResult.reason.message
+            : "未知错误"
+        }`;
+      }
+    }
+
     const connected = sources.filter(
       (source) => source.status === "connected",
     ).length;
@@ -119,21 +168,14 @@ export async function analyzeEquity(
     detail: "核对冻结时间、GAAP 口径、KPI 历史序列与做空约束。",
   });
 
-  if (input.symbol === "NVDA") {
+  if (input.symbol === "NVDA" && input.dataMode === "DEMO") {
     const report = makeNvdaDemoReport(input, sources);
     report.meta.market = market === "US" ? "NASDAQ" : market;
-    if (
-      input.dataMode !== "DEMO" &&
-      sources.some((source) => source.status === "connected")
-    ) {
-      report.meta.asOf =
-        "混合模式 · 官方连接状态已验证，分析样例待实时一致预期替换";
-    }
     reportProgress({
       stage: "evidence",
-      status: "warning",
-      message: "实时一致预期未接入，报告保持演示标识",
-      detail: "不会把连接探测结果冒充为实时财报预测。",
+      status: "done",
+      message: "已载入明确标记的演示证据",
+      detail: "所有数值保持非实时标识，不用于交易。",
     });
     reportProgress({
       stage: "scenarios",
@@ -142,6 +184,32 @@ export async function analyzeEquity(
       detail: "Bull / Base / Bear 概率合计 100%。",
     });
     return report;
+  }
+
+  if (
+    input.symbol === "NVDA" &&
+    input.dataMode !== "DEMO" &&
+    consensus &&
+    marketSnapshot
+  ) {
+    reportProgress({
+      stage: "evidence",
+      status: "warning",
+      message: "行情与 EPS 一致预期已冻结，方向门槛仍未全部通过",
+      detail: "收入一致预期、公司 KPI 与毛利率门槛缺失，强制输出 WAIT。",
+    });
+    reportProgress({
+      stage: "scenarios",
+      status: "done",
+      message: "已生成不含伪目标价的条件情景",
+      detail: "Bull / Base / Bear 只列证据触发器，目标价保持不计算。",
+    });
+    return makeNvdaLiveScreenReport(
+      input,
+      consensus,
+      marketSnapshot,
+      sources,
+    );
   }
 
   const gaps = [
@@ -165,4 +233,3 @@ export async function analyzeEquity(
   });
   return makeConditionalReport(input, sources, gaps);
 }
-

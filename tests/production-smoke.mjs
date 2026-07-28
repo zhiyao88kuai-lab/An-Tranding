@@ -38,7 +38,8 @@ assert.equal(health.status, 200);
 const healthPayload = await health.json();
 assert.equal(healthPayload.ok, true);
 assert.equal(healthPayload.capabilities.reportEngine, true);
-assert.equal(healthPayload.capabilities.liveAnalysisImplemented, false);
+assert.equal(healthPayload.capabilities.liveAnalysisImplemented, true);
+assert.equal(typeof healthPayload.capabilities.liveReady, "boolean");
 
 const stream = await request("/api/analyze/stream", {
   method: "POST",

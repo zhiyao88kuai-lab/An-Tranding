@@ -137,7 +137,7 @@ export function ResearchDashboard({ initialReport }: Props) {
     companyName: "NVIDIA",
     market: "AUTO",
     positionSide: "LONG",
-    positionWeight: 6,
+    positionWeight: 5,
     costBasis: undefined,
     horizon: "EVENT",
     riskTolerance: "MEDIUM",
@@ -157,6 +157,9 @@ export function ResearchDashboard({ initialReport }: Props) {
   const generatedAtLabel = `${report.meta.generatedAt
     .replace("T", " ")
     .slice(0, 19)} UTC`;
+  const expectationPeriodLabels = report.meta.liveDataReady
+    ? ["本季", "下季", "FY1", "FY2"]
+    : ["本期 t", "上季 t-1", "去年 t-4", "两年前 t-8"];
   const progressPercent = Math.round(
     (Object.keys(progress).length / analysisStages.length) * 100,
   );
@@ -165,9 +168,11 @@ export function ResearchDashboard({ initialReport }: Props) {
       ? "演示模式不会请求当前行情或实时一致预期；输出仅用于查看系统结构。"
       : request.dataMode === "LOCAL_RESEARCH"
         ? health.liveReady
-          ? "本机实时链路已就绪；系统仍会按证据完整性决定是否输出方向。"
-          : "当前只验证本机 SSH 隧道与 MCP 是否可达，尚不会据此生成实时一致预期；结果会保持演示或降级为 WAIT。"
-        : "当前只验证官方源与 dev0 MCP 的连接证据；尚未接入实时一致预期，不会生成可交易目标价。";
+          ? "本机实施链路已就绪：SSH 隧道、dev0 MCP 与 EPS 一致预期均可达；仍会按证据完整性决定是否输出方向。"
+          : "本机实施链路尚未全部就绪；缺失连接会明确显示，结果会安全降级为 WAIT。"
+        : health.liveReady
+          ? "公开数据源与私有 MCP 实施链路均已连接；系统会冻结证据并按门槛决定方向。"
+          : "公开源或私有 MCP 尚有缺口；系统会显示连接证据并安全降级为 WAIT。";
 
   useEffect(() => {
     let active = true;
@@ -313,8 +318,8 @@ export function ResearchDashboard({ initialReport }: Props) {
             {health.state === "checking"
               ? "正在检测数据源"
               : health.liveReady
-                ? "实时分析链路已就绪"
-                : "实时分析未连接"}
+                ? "实施链路已就绪"
+                : "实施链路未就绪"}
           </span>
           <span className="topbar-divider" />
           <span>只读 · 不自动下单</span>
@@ -380,7 +385,7 @@ export function ResearchDashboard({ initialReport }: Props) {
             <span className="panel-index">01</span>
           </div>
 
-          <form onSubmit={runAnalysis}>
+          <form onSubmit={runAnalysis} noValidate>
             <label className="field">
               <span>股票代码 / 名称</span>
               <div className="symbol-input">
@@ -562,10 +567,10 @@ export function ResearchDashboard({ initialReport }: Props) {
               >
                 <option value="DEMO">演示报告（不获取实时数据）</option>
                 <option value="OFFICIAL">
-                  数据源连通性检查（不足则 WAIT）
+                  实施链路分析（不足则 WAIT）
                 </option>
                 <option value="LOCAL_RESEARCH">
-                  本机 MCP 连接测试（仅本地）
+                  本机实施链路（SSH + HTTP MCP）
                 </option>
               </select>
             </label>
@@ -581,8 +586,8 @@ export function ResearchDashboard({ initialReport }: Props) {
                 {request.dataMode === "DEMO"
                   ? "非实时"
                   : health.liveReady
-                    ? "实时链路可用"
-                    : "实时链路未就绪"}
+                    ? "实施链路已就绪"
+                    : "实施链路未就绪"}
               </strong>
               <p>{selectedModeDisclosure}</p>
             </div>
@@ -595,7 +600,7 @@ export function ResearchDashboard({ initialReport }: Props) {
                   ? `正在分析 ${runSymbol} · ${(elapsedMs / 1000).toFixed(1)}s`
                   : request.dataMode === "DEMO"
                     ? "生成演示报告"
-                    : "运行数据源验证分析"}
+                    : "运行实时证据分析"}
               </span>
               <b className={loading ? "button-spinner" : ""}>
                 {loading ? "◌" : "→"}
@@ -752,17 +757,20 @@ export function ResearchDashboard({ initialReport }: Props) {
             <SectionTitle
               eyebrow="EXPECTATIONS MAP"
               title="一致预期与财报门槛"
-              note="t / t-1 / t-4 / t-8"
+              note={
+                report.meta.liveDataReady
+                  ? "本季 / 下季 / FY1 / FY2"
+                  : "t / t-1 / t-4 / t-8"
+              }
             />
             <div className="table-wrap">
               <table>
                 <thead>
                   <tr>
                     <th>指标</th>
-                    <th>本期 t</th>
-                    <th>上季 t-1</th>
-                    <th>去年 t-4</th>
-                    <th>两年前 t-8</th>
+                    {expectationPeriodLabels.map((label) => (
+                      <th key={label}>{label}</th>
+                    ))}
                     <th>证据</th>
                     <th>争议焦点</th>
                   </tr>

@@ -16,16 +16,18 @@ type McpResult = {
   isError?: boolean;
 };
 
-function parsePayload(text: string): unknown {
+export function parsePayload(text: string): unknown {
   const trimmed = text.trim();
   if (!trimmed) return null;
-  if (trimmed.startsWith("data:")) {
-    const payload = trimmed
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trim())
-      .find(Boolean);
-    return payload ? JSON.parse(payload) : null;
+  if (trimmed.includes("data:")) {
+    const payloads = trimmed
+      .split(/\r?\n/)
+      .filter((line) => line.trimStart().startsWith("data:"))
+      .map((line) => line.trimStart().slice(5).trim())
+      .filter(Boolean);
+    if (payloads.length > 0) {
+      return JSON.parse(payloads.at(-1) as string);
+    }
   }
   return JSON.parse(trimmed);
 }
@@ -158,3 +160,51 @@ export async function probeVibeMcp(): Promise<SourceRecord> {
   }
 }
 
+export type MarketSnapshot = {
+  symbol: string;
+  asOf: string;
+  firstClose: number;
+  lastClose: number;
+  lastVolume: number;
+  periodReturnPct: number;
+  bars: number;
+};
+
+export async function fetchVibeMarketSnapshot(
+  symbol: string,
+): Promise<MarketSnapshot> {
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 45);
+  const dateOnly = (value: Date) => value.toISOString().slice(0, 10);
+  const code = symbol.includes(".") ? symbol : `${symbol}.US`;
+  const payload = (await callVibeTool("get_market_data", {
+    codes: [code],
+    start_date: dateOnly(start),
+    end_date: dateOnly(end),
+    source: "auto",
+    interval: "1D",
+    max_rows: 40,
+  })) as Record<string, unknown>;
+  const rows = payload?.[code];
+  if (!Array.isArray(rows) || rows.length < 2) {
+    throw new Error("MCP market snapshot is incomplete");
+  }
+  const first = rows[0] as Record<string, unknown>;
+  const last = rows.at(-1) as Record<string, unknown>;
+  const firstClose = Number(first.close);
+  const lastClose = Number(last.close);
+  const lastVolume = Number(last.volume);
+  if (![firstClose, lastClose, lastVolume].every(Number.isFinite)) {
+    throw new Error("MCP market snapshot contains invalid values");
+  }
+  return {
+    symbol: code,
+    asOf: String(last.trade_date || new Date().toISOString()),
+    firstClose,
+    lastClose,
+    lastVolume,
+    periodReturnPct: ((lastClose / firstClose - 1) * 100),
+    bars: rows.length,
+  };
+}

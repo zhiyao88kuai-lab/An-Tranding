@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-local_port="${VIBE_LOCAL_PORT:-18789}"
-remote_port="${VIBE_REMOTE_PORT:-8787}"
+local_port="${VIBE_LOCAL_PORT:-18900}"
+remote_port="${VIBE_REMOTE_PORT:-8900}"
 remote_host="${VIBE_REMOTE_HOST:-127.0.0.1}"
 ssh_target="${VIBE_SSH_TARGET:-dev0}"
 
@@ -25,4 +25,3 @@ exec ssh \
   -o ServerAliveCountMax=3 \
   -o TCPKeepAlive=no \
   "${ssh_target}"
-

@@ -3,6 +3,7 @@ import { after, before, test } from "node:test";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { resolve } from "node:path";
+import { parsePayload } from "../lib/providers/vibe-mcp.ts";
 
 const port = 32_000 + (process.pid % 10_000);
 const origin = `http://127.0.0.1:${port}`;
@@ -34,7 +35,13 @@ before(
       ["node_modules/next/dist/bin/next", "start", "-p", String(port)],
       {
         cwd: projectRoot,
-        env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
+        env: {
+          ...process.env,
+          NEXT_TELEMETRY_DISABLED: "1",
+          DATA_MODE: "DEMO",
+          VIBE_MCP_URL: "",
+          CONSENSUS_PROVIDER_URL: "http://127.0.0.1:1",
+        },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
@@ -80,8 +87,16 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(positionWeightInput, /min="0"/i);
   assert.match(positionWeightInput, /max="100"/i);
   assert.match(positionWeightInput, /step="5"/i);
+  assert.match(positionWeightInput, /value="5"/i);
   assert.match(html, /aria-label="仓位比例增加 5%"/i);
   assert.match(html, /aria-label="仓位比例减少 5%"/i);
+});
+
+test("MCP parser accepts event-stream envelopes", () => {
+  assert.deepEqual(
+    parsePayload('event: message\ndata: {"jsonrpc":"2.0","result":{"ok":true}}'),
+    { jsonrpc: "2.0", result: { ok: true } },
+  );
 });
 
 test("analysis API applies position-aware risk guidance", async () => {
@@ -171,6 +186,8 @@ test("health endpoint does not overstate realtime capability", async () => {
   assert.equal(response.status, 200);
   const health = await response.json();
   assert.equal(health.capabilities.liveReady, false);
-  assert.equal(health.capabilities.liveAnalysisImplemented, false);
-  assert.match(health.disclosure, /尚未完成实时一致预期/);
+  assert.equal(health.capabilities.liveAnalysisImplemented, true);
+  assert.equal(health.capabilities.vibeConnected, false);
+  assert.equal(health.capabilities.consensusConnected, false);
+  assert.match(health.disclosure, /实施链路尚未全部就绪/);
 });

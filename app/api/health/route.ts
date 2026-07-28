@@ -1,41 +1,48 @@
+import { probeNasdaqConsensus } from "../../../lib/providers/nasdaq-consensus";
 import { probeVibeMcp } from "../../../lib/providers/vibe-mcp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const vibe = process.env.VIBE_MCP_URL
-    ? await probeVibeMcp()
-    : {
-        name: "vibe_trading_dev0",
-        provider: "SSH tunnel + HTTP MCP",
-        status: "missing" as const,
-        asOf: new Date().toISOString(),
-        tier: "LOCAL" as const,
-        note: "VIBE_MCP_URL 未配置",
-      };
+  const [vibe, consensus] = await Promise.all([
+    process.env.VIBE_MCP_URL
+      ? probeVibeMcp()
+      : Promise.resolve({
+          name: "vibe_trading_dev0",
+          provider: "SSH tunnel + HTTP MCP",
+          status: "missing" as const,
+          asOf: new Date().toISOString(),
+          tier: "LOCAL" as const,
+          note: "VIBE_MCP_URL 未配置",
+        }),
+    probeNasdaqConsensus(),
+  ]);
 
-  const consensusConfigured = Boolean(process.env.CONSENSUS_PROVIDER_URL);
+  const consensusConfigured = true;
   const vibeConnected = vibe.status === "connected";
-  const liveAnalysisImplemented = false;
+  const consensusConnected = consensus.status === "connected";
+  const liveAnalysisImplemented = true;
   const liveReady =
-    liveAnalysisImplemented && consensusConfigured && vibeConnected;
+    liveAnalysisImplemented && consensusConnected && vibeConnected;
 
   return Response.json({
     ok: true,
     service: "equity-research-cockpit",
     dataMode: process.env.DATA_MODE || "DEMO",
     vibe,
+    consensus,
     capabilities: {
       reportEngine: true,
       officialSourceProbe: true,
       vibeConnected,
       consensusConfigured,
+      consensusConnected,
       liveAnalysisImplemented,
       liveReady,
     },
     disclosure: liveReady
-      ? "实时数据链路已就绪；仍会按证据门槛决定是否输出方向。"
-      : "当前版本尚未完成实时一致预期的生产接入；即使官方源或 dev0 MCP 可达，也只会显示连接证据，不会冒充实时分析。",
+      ? "实施链路已就绪：dev0 行情 MCP 与 EPS 一致预期均已连接；系统仍会按证据门槛决定是否输出方向。"
+      : "实施链路尚未全部就绪；缺失的连接会在数据源账本中显示，分析将安全降级为 WAIT。",
   });
 }
