@@ -38,8 +38,13 @@ npx vercel@latest deploy --prod
 ```
 
 当前生产地址：
-[`https://signalforge-equity-cockpit.vercel.app`](https://signalforge-equity-cockpit.vercel.app)。
+[`https://signalforge-equity-cockpit-dusky.vercel.app`](https://signalforge-equity-cockpit-dusky.vercel.app)。
 项目级 SSO 部署保护应保持关闭，确保页面可公开访问。
+
+源代码：
+[`zhiyao88kuai-lab/An-Tranding`](https://github.com/zhiyao88kuai-lab/An-Tranding)。
+每次推送到 `main` 都会运行构建、API 测试和生产依赖审计；手动运行
+`SignalForge CI` 时可传入生产地址执行站外冒烟测试。
 
 部分中国大陆网络会直接重置 `*.vercel.app` 连接。若出现
 `ERR_CONNECTION_RESET`，应给项目绑定自有域名；这属于域名/网络可达性问题，

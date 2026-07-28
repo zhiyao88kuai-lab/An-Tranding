@@ -63,7 +63,7 @@ const events = (await stream.text())
   .split("\n")
   .map((line) => JSON.parse(line));
 assert.equal(events.at(-1).type, "complete");
-assert.equal(events.at(-1).report.symbol, "NVDA");
+assert.equal(events.at(-1).report.meta.symbol, "NVDA");
 assert.equal(events.at(-1).report.meta.liveDataReady, false);
 
 console.log(`Production smoke test passed: ${origin}`);
