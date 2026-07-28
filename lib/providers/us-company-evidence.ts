@@ -414,7 +414,7 @@ export async function fetchUsCompanyEvidence(
     fetchJson<SecCompanyFacts>(`${SEC_FACTS}/CIK${cik}.json`),
   ]);
   const periods = buildPeriods(facts);
-  if (periods.length < 3) {
+  if (periods.length < 1) {
     throw new Error("SEC quarterly fundamentals are incomplete");
   }
   const release = await findEarningsRelease(cik, submissions);

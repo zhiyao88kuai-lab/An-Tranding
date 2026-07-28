@@ -151,6 +151,8 @@ test("unknown symbols fail closed to WAIT when evidence is missing", async () =>
   const report = await response.json();
   assert.equal(report.decision.side, "WAIT");
   assert.equal(report.decision.actionability, "screen-grade");
+  assert.equal(report.meta.market, "US");
+  assert.equal(report.meta.evidenceReadiness, "insufficient");
   assert.ok(report.evidenceGaps.length >= 3);
 });
 
@@ -186,6 +188,10 @@ test("streaming API exposes honest backend progress", async () => {
   assert.match(sourceEvent.update.message, /未请求实时数据/);
   assert.equal(events.at(-1).type, "complete");
   assert.equal(events.at(-1).report.meta.liveDataReady, false);
+  assert.equal(
+    events.at(-1).report.meta.evidenceReadiness,
+    "insufficient",
+  );
 });
 
 test("health endpoint does not overstate realtime capability", async () => {

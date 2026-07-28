@@ -69,7 +69,7 @@ export async function fetchNasdaqConsensus(
   };
   const quarterly = validRows(payload.data?.quarterlyForecast?.rows);
   const yearly = validRows(payload.data?.yearlyForecast?.rows);
-  if (payload.status?.rCode !== 200 || quarterly.length < 2) {
+  if (payload.status?.rCode !== 200 || quarterly.length < 1) {
     throw new Error("Nasdaq consensus response is incomplete");
   }
 

@@ -42,6 +42,7 @@ export function makeNvdaDemoReport(
       ],
       isDemo: true,
       liveDataReady: false,
+      evidenceReadiness: "insufficient",
       dataDisclosure:
         "演示报告：未获取实时股价、实时一致预期、期权或借券数据。",
     },
@@ -332,6 +333,7 @@ export function makeConditionalReport(
   input: AnalysisRequest,
   sources: ResearchReport["sources"],
   gaps: string[],
+  resolvedMarket: Exclude<AnalysisRequest["market"], "AUTO">,
 ): ResearchReport {
   const symbol = input.symbol.trim().toUpperCase();
   const report = makeNvdaDemoReport(
@@ -342,9 +344,14 @@ export function makeConditionalReport(
   report.meta.symbol = symbol;
   report.meta.company = input.companyName?.trim() || symbol;
   report.meta.market =
-    input.market === "AUTO" ? "待自动识别" : input.market;
+    resolvedMarket === "US"
+      ? "US"
+      : resolvedMarket === "HK"
+        ? "HK"
+        : "A 股";
   report.meta.isDemo = false;
   report.meta.liveDataReady = false;
+  report.meta.evidenceReadiness = "insufficient";
   report.meta.dataDisclosure =
     "已尝试连接数据源，但关键实时证据不完整；系统已强制降级为 WAIT。";
   report.meta.asOf = "连接结果 · 证据不完整";

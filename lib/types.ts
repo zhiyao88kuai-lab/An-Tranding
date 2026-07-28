@@ -76,6 +76,7 @@ export interface ResearchReport {
     expectationPeriodLabels?: [string, string, string, string];
     isDemo: boolean;
     liveDataReady: boolean;
+    evidenceReadiness: "complete" | "partial" | "insufficient";
     dataDisclosure: string;
   };
   decision: {

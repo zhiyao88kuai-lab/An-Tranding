@@ -132,6 +132,9 @@ export function ResearchDashboard({ initialReport }: Props) {
   const [error, setError] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [runSymbol, setRunSymbol] = useState("");
+  const [runState, setRunState] = useState<
+    "idle" | "running" | "complete" | "error"
+  >("idle");
   const [progress, setProgress] = useState<
     Partial<Record<AnalysisStageId, AnalysisProgressUpdate>>
   >({});
@@ -173,6 +176,9 @@ export function ResearchDashboard({ initialReport }: Props) {
   const progressPercent = Math.round(
     (Object.keys(progress).length / analysisStages.length) * 100,
   );
+  const evidenceReadiness =
+    report.meta.evidenceReadiness ||
+    (report.meta.liveDataReady ? "complete" : "insufficient");
   const selectedModeDisclosure =
     request.dataMode === "DEMO"
       ? "演示模式不会请求当前行情或实时一致预期；输出仅用于查看系统结构。"
@@ -246,6 +252,7 @@ export function ResearchDashboard({ initialReport }: Props) {
     event?.preventDefault();
     const startedAt = Date.now();
     setLoading(true);
+    setRunState("running");
     setError("");
     setElapsedMs(0);
     setRunSymbol(request.symbol.trim().toUpperCase());
@@ -299,9 +306,12 @@ export function ResearchDashboard({ initialReport }: Props) {
         await new Promise((resolve) => window.setTimeout(resolve, remaining));
       }
       setReport(completedReport);
+      setRunState("complete");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "分析任务失败");
+      setRunState("error");
     } finally {
+      setElapsedMs(Date.now() - startedAt);
       setLoading(false);
     }
   }, [request]);
@@ -635,21 +645,34 @@ export function ResearchDashboard({ initialReport }: Props) {
         </aside>
 
         <div className={`report-column ${loading ? "is-running" : ""}`}>
-          {loading ? (
+          {runState !== "idle" ? (
             <section
-              className="progress-panel"
+              className={`progress-panel run-${runState}`}
               aria-live="polite"
               aria-label="分析进度"
             >
               <header>
                 <div>
                   <span>LIVE TASK STATUS</span>
-                  <h2>正在分析 {runSymbol}</h2>
+                  <h2>
+                    {runState === "running"
+                      ? `正在分析 ${runSymbol}`
+                      : runState === "complete"
+                        ? `${runSymbol} 分析过程 · 已完成`
+                        : `${runSymbol} 分析过程 · 已中断`}
+                  </h2>
                   <p>
-                    后端正在逐步返回真实状态；演示模式会明确跳过实时数据源。
+                    {runState === "running"
+                      ? "后端正在逐步返回真实状态；演示模式会明确跳过实时数据源。"
+                      : runState === "complete"
+                        ? "以下保留本次真实执行记录，便于核对市场路由、数据源、证据门槛与情景生成。"
+                        : "已保留中断前的执行记录；错误原因显示在任务表单中。"}
                   </p>
                 </div>
-                <strong>{(elapsedMs / 1000).toFixed(1)}s</strong>
+                <strong>
+                  {runState === "running" ? "" : "总耗时 "}
+                  {(elapsedMs / 1000).toFixed(1)}s
+                </strong>
               </header>
               <div className="progress-track">
                 <i style={{ width: `${progressPercent}%` }} />
@@ -689,7 +712,11 @@ export function ResearchDashboard({ initialReport }: Props) {
 
           <section
             className={`report-disclosure ${
-              report.meta.liveDataReady ? "ready" : "limited"
+              evidenceReadiness === "complete"
+                ? "ready"
+                : evidenceReadiness === "partial"
+                  ? "partial"
+                  : "limited"
             }`}
             aria-live="polite"
           >
@@ -698,9 +725,11 @@ export function ResearchDashboard({ initialReport }: Props) {
                 ? "以下为上一次报告"
                 : report.meta.isDemo
                   ? "演示报告 · 非实时 · 不可据此交易"
-                  : report.meta.liveDataReady
+                  : evidenceReadiness === "complete"
                     ? "实时证据报告"
-                    : "实时证据不完整 · 已降级"}
+                    : evidenceReadiness === "partial"
+                      ? "实时分析已完成 · 部分证据受限"
+                      : "实时证据不完整 · 已降级"}
             </strong>
             <p>
               {loading

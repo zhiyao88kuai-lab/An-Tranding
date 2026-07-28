@@ -727,6 +727,24 @@ summary {
   white-space: nowrap;
 }
 
+.progress-panel.run-complete {
+  border-color: rgba(57, 214, 189, 0.3);
+}
+
+.progress-panel.run-complete > header span,
+.progress-panel.run-complete > header > strong {
+  color: var(--signal);
+}
+
+.progress-panel.run-error {
+  border-color: rgba(238, 155, 72, 0.36);
+}
+
+.progress-panel.run-error > header span,
+.progress-panel.run-error > header > strong {
+  color: var(--risk);
+}
+
 .progress-track {
   height: 3px;
   background: rgba(255, 255, 255, 0.06);
@@ -823,6 +841,12 @@ summary {
   background: rgba(238, 155, 72, 0.055);
 }
 
+.report-disclosure.partial {
+  border-color: rgba(90, 157, 247, 0.3);
+  border-left-color: var(--blue);
+  background: rgba(90, 157, 247, 0.055);
+}
+
 .report-disclosure strong {
   flex: 0 0 auto;
   color: var(--signal);
@@ -831,6 +855,10 @@ summary {
 
 .report-disclosure.limited strong {
   color: var(--risk);
+}
+
+.report-disclosure.partial strong {
+  color: var(--blue);
 }
 
 .report-disclosure p {

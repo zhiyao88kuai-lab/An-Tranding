@@ -1,5 +1,8 @@
 import { makeConditionalReport, makeNvdaDemoReport } from "./demo-report";
-import { makeGenericUsLiveReport } from "./generic-live-report";
+import {
+  makeGenericUsLiveReport,
+  makePartialUsLiveReport,
+} from "./generic-live-report";
 import { makeNvdaLiveScreenReport } from "./live-report";
 import {
   fetchNasdaqMarketSnapshot,
@@ -339,6 +342,45 @@ export async function analyzeEquity(
     );
   }
 
+  if (
+    market === "US" &&
+    input.symbol !== "NVDA" &&
+    input.dataMode !== "DEMO" &&
+    (consensus || marketSnapshot || companyEvidence)
+  ) {
+    const missing = [
+      !marketSnapshot ? "实时行情快照未取得。" : null,
+      !consensus ? "带冻结时间的 EPS 一致预期未取得。" : null,
+      !companyEvidence
+        ? "SEC / IR 单季公司事实与指引未取得；外国发行人可能需 20-F / 6-K 或 IFRS 适配器。"
+        : null,
+      ...(positioning?.gaps || []),
+    ].filter((item): item is string => Boolean(item));
+    reportProgress({
+      stage: "evidence",
+      status: "warning",
+      message: `${input.symbol} 已完成部分实时证据分析`,
+      detail: `保留已取得的行情、一致预期、公司事实与定位数据；缺少 ${missing.length} 项证据，方向限制为 WAIT。`,
+    });
+    reportProgress({
+      stage: "scenarios",
+      status: "warning",
+      message: "已生成证据受限的 Bull / Base / Bear 框架",
+      detail:
+        "仅在行情和远期 EPS 同时存在时计算目标价；缺失字段保持待补，不使用演示值。",
+    });
+    return makePartialUsLiveReport(
+      input,
+      market,
+      consensus,
+      marketSnapshot,
+      companyEvidence,
+      positioning,
+      sources,
+      missing,
+    );
+  }
+
   const gaps = [
     "未获得带冻结时间的一致预期与买方高端门槛。",
     "核心 KPI 的 t/t-1/t-4/t-8 历史序列不完整。",
@@ -358,5 +400,5 @@ export async function analyzeEquity(
     message: "未生成可交易目标价",
     detail: "缺少一致预期和估值基准，情景值保持不可计算。",
   });
-  return makeConditionalReport(input, sources, gaps);
+  return makeConditionalReport(input, sources, gaps, market);
 }

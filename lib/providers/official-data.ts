@@ -3,7 +3,10 @@ import type { Market, SourceRecord } from "../types";
 const SEC_TICKER_URL =
   "https://www.sec.gov/files/company_tickers_exchange.json";
 
-export function inferMarket(symbol: string, requested: Market): Market {
+export function inferMarket(
+  symbol: string,
+  requested: Market,
+): Exclude<Market, "AUTO"> {
   if (requested !== "AUTO") return requested;
   const value = symbol.trim().toUpperCase();
   if (/^(SH|SZ|BJ)?\d{6}$/.test(value)) return "CN";
@@ -66,4 +69,3 @@ export async function probeOfficialSource(
     };
   }
 }
-

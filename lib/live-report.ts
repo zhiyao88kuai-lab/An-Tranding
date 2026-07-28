@@ -124,6 +124,7 @@ export function makeNvdaLiveScreenReport(
     freezeTime: frozenAt,
     isDemo: false,
     liveDataReady: true,
+    evidenceReadiness: "complete",
     dataDisclosure:
       "公开实施链路已就绪：SEC 公司事实、Nasdaq 行情/EPS 一致预期与 FINRA 定位信号均按时间冻结。收入一致预期和借券数据仍受许可限制，结论保持条件化。",
   };
