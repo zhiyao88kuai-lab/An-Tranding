@@ -85,6 +85,16 @@ test("server-renders the finished research cockpit", async () => {
   assert.match(html, /创建分析任务/);
   assert.match(html, /财报前决策摘要/);
   assert.match(html, /演示报告 · 非实时 · 不可据此交易/);
+  const symbolInput = html.match(
+    /<input[^>]+placeholder="例如 NVDA \/ 00700 \/ 600519"[^>]*>/i,
+  )?.[0];
+  const companyInput = html.match(
+    /<input[^>]+placeholder="用于报告标题"[^>]*>/i,
+  )?.[0];
+  assert.ok(symbolInput, "symbol input should be rendered");
+  assert.ok(companyInput, "company name input should be rendered");
+  assert.match(symbolInput, /value=""/i);
+  assert.match(companyInput, /value=""/i);
   assert.match(html, /2026-08-12 至 2026-08-23/);
   assert.match(
     html,

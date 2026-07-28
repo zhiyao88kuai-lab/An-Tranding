@@ -5,7 +5,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
 } from "react";
 import type {
@@ -127,7 +126,6 @@ function SectionTitle({
 }
 
 export function ResearchDashboard({ initialReport }: Props) {
-  const autoRunStarted = useRef(false);
   const [report, setReport] = useState(initialReport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -146,8 +144,8 @@ export function ResearchDashboard({ initialReport }: Props) {
     disclosure: "正在检查实时数据链路…",
   });
   const [request, setRequest] = useState<AnalysisRequest>({
-    symbol: "NVDA",
-    companyName: "NVIDIA",
+    symbol: "",
+    companyName: "",
     market: "AUTO",
     positionSide: "LONG",
     positionWeight: 5,
@@ -347,18 +345,6 @@ export function ResearchDashboard({ initialReport }: Props) {
       setLoading(false);
     }
   }, [request]);
-
-  useEffect(() => {
-    if (
-      health.state !== "ready" ||
-      autoRunStarted.current ||
-      loading
-    ) {
-      return;
-    }
-    autoRunStarted.current = true;
-    void runAnalysis();
-  }, [health.state, loading, runAnalysis]);
 
   return (
     <main className="app-shell">
