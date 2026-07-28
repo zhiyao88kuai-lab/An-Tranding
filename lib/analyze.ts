@@ -1,6 +1,13 @@
 import { makeConditionalReport, makeNvdaDemoReport } from "./demo-report";
 import { makeNvdaLiveScreenReport } from "./live-report";
 import {
+  fetchNasdaqMarketSnapshot,
+  fetchNvdaOfficialSnapshot,
+  fetchNvdaPositioning,
+  type NvdaOfficialSnapshot,
+  type NvdaPositioningSnapshot,
+} from "./providers/nvda-evidence";
+import {
   fetchNasdaqConsensus,
   type ConsensusSnapshot,
 } from "./providers/nasdaq-consensus";
@@ -77,6 +84,8 @@ export async function analyzeEquity(
   const sources: SourceRecord[] = [];
   let consensus: ConsensusSnapshot | undefined;
   let marketSnapshot: MarketSnapshot | undefined;
+  let officialSnapshot: NvdaOfficialSnapshot | undefined;
+  let positioning: NvdaPositioningSnapshot | undefined;
 
   reportProgress({
     stage: "route",
@@ -102,9 +111,22 @@ export async function analyzeEquity(
     sources.push(official, vibe);
 
     if (market === "US" && input.symbol === "NVDA") {
-      const [consensusResult, marketResult] = await Promise.allSettled([
+      const marketPromise =
+        input.dataMode === "LOCAL_RESEARCH"
+          ? fetchVibeMarketSnapshot(input.symbol).catch(async () => {
+              const fallback = await fetchNasdaqMarketSnapshot(input.symbol);
+              sources.push(fallback.source);
+              return fallback;
+            })
+          : fetchNasdaqMarketSnapshot(input.symbol).then((snapshot) => {
+              sources.push(snapshot.source);
+              return snapshot;
+            });
+      const [consensusResult, marketResult, officialResult] =
+        await Promise.allSettled([
         fetchNasdaqConsensus(input.symbol),
-        fetchVibeMarketSnapshot(input.symbol),
+        marketPromise,
+        fetchNvdaOfficialSnapshot(),
       ]);
       if (consensusResult.status === "fulfilled") {
         consensus = consensusResult.value;
@@ -124,9 +146,11 @@ export async function analyzeEquity(
       }
       if (marketResult.status === "fulfilled") {
         marketSnapshot = marketResult.value;
-        vibe.status = "connected";
-        vibe.asOf = marketSnapshot.asOf;
-        vibe.note = `已验证 ${marketSnapshot.bars} 条只读日线行情。`;
+        if (input.dataMode === "LOCAL_RESEARCH") {
+          vibe.status = "connected";
+          vibe.asOf = marketSnapshot.asOf;
+          vibe.note = `已验证 ${marketSnapshot.bars} 条只读日线行情。`;
+        }
       } else {
         vibe.note = `${
           vibe.status === "connected" ? "MCP 基础连接正常；" : ""
@@ -135,6 +159,29 @@ export async function analyzeEquity(
             ? marketResult.reason.message
             : "未知错误"
         }`;
+      }
+      if (officialResult.status === "fulfilled") {
+        officialSnapshot = officialResult.value;
+        sources.push(officialSnapshot.source);
+      } else {
+        sources.push({
+          name: "NVIDIA reported results & outlook",
+          provider: "SEC EDGAR earnings exhibit · global-stock-data",
+          status: "missing",
+          asOf: new Date().toISOString(),
+          tier: "S",
+          note:
+            officialResult.reason instanceof Error
+              ? officialResult.reason.message
+              : "SEC 公司事实连接失败",
+        });
+      }
+      if (marketSnapshot) {
+        positioning = await fetchNvdaPositioning(
+          input.symbol,
+          marketSnapshot.lastClose,
+        );
+        sources.push(...positioning.sources);
       }
     }
 
@@ -190,24 +237,30 @@ export async function analyzeEquity(
     input.symbol === "NVDA" &&
     input.dataMode !== "DEMO" &&
     consensus &&
-    marketSnapshot
+    marketSnapshot &&
+    officialSnapshot
   ) {
+    const coreGaps = positioning?.gaps.length ?? 1;
     reportProgress({
       stage: "evidence",
-      status: "warning",
-      message: "行情与 EPS 一致预期已冻结，方向门槛仍未全部通过",
-      detail: "收入一致预期、公司 KPI 与毛利率门槛缺失，强制输出 WAIT。",
+      status: coreGaps > 0 ? "warning" : "done",
+      message: "公司事实、行情、EPS 一致预期与定位信号已冻结",
+      detail:
+        "SEC 已补齐收入、数据中心 KPI 与 GAAP/非 GAAP 毛利率；收入卖方一致预期和借券数据保持许可受限标记。",
     });
     reportProgress({
       stage: "scenarios",
       status: "done",
-      message: "已生成不含伪目标价的条件情景",
-      detail: "Bull / Base / Bear 只列证据触发器，目标价保持不计算。",
+      message: "已生成可审计的 Bull / Base / Bear 情景估值",
+      detail:
+        "目标价由远期 EPS 一致预期与显式市盈率假设计算；不把期权隐含波动当作方向。",
     });
     return makeNvdaLiveScreenReport(
       input,
       consensus,
       marketSnapshot,
+      officialSnapshot,
+      positioning,
       sources,
     );
   }

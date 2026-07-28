@@ -8,8 +8,10 @@ SignalForge 是一个可运行的一键财报前研究系统：前端收集股�
 
 - `NVDA + DEMO`：展示完整研究报告样例，所有数值明确标记为非实时。
 - 其他股票或证据不足：自动降级为 `WAIT / screen-grade`，不会伪造一致预期或目标价。
-- `OFFICIAL`：冻结 SEC、Nasdaq EPS 一致预期与 dev0 MCP 的连接证据；关键 KPI 不足时自动降级为 `WAIT`。
+- `OFFICIAL`：冻结 SEC 公司业绩/指引、Nasdaq 行情/EPS/事件期权摘要与 FINRA 短成交量；无需访问本机隧道。
 - `LOCAL_RESEARCH`：通过本机 SSH 隧道调用 dev0 的只读 HTTP MCP，并与 Nasdaq EPS 一致预期形成可验证的实时实施链路。
+- 页面首屏健康检查通过后会自动运行一次 NVDA 公开证据分析，并显示后端逐阶段进度。
+- 收入卖方一致预期和借券费率需要授权数据源；未配置时明确标记为受限，不用公司指引或 FINRA 短成交量冒充。
 - 页面会显示请求校验、市场路由、数据源、证据门槛、情景与报告生成的真实后端进度；演示模式会明确显示“未请求实时数据”。
 - 做空必须补齐借券成本、利用率、拥挤度和挤压风险，缺一则不能标记为 `implementation-ready`。
 
@@ -50,16 +52,20 @@ npx vercel@latest deploy --prod
 `ERR_CONNECTION_RESET`，应给项目绑定自有域名；这属于域名/网络可达性问题，
 不是 Next.js 应用或 API 故障。
 
-公网环境默认保持 `DEMO`。Vercel 无法访问本机 `127.0.0.1` 上的 SSH
-隧道；生产实时模式需要 Cloudflare Tunnel + Access 服务令牌，把 Vercel
-服务端安全连接至仍只监听 dev0 回环地址的 MCP。不得公开暴露 MCP。
+公网环境默认使用 `OFFICIAL`。Vercel 无法访问本机 `127.0.0.1` 上的 SSH
+隧道，但公开分析链不再依赖该隧道：SEC 公司事实、Nasdaq 行情/EPS/
+事件期权摘要与 FINRA 派生比率可直接由服务端获取。dev0 MCP 作为本地增强
+链；若未来需要让 Vercel 使用它，仍应通过 Cloudflare Tunnel + Access
+服务令牌连接，禁止公开暴露 MCP。
 
 可在 Vercel 中设置以下服务端环境变量：
 
-- `DATA_MODE=DEMO`：安全默认值。
+- `DATA_MODE=OFFICIAL`：公开证据链默认值。
 - `SEC_USER_AGENT`：仅在启用官方 SEC 连接探测时设置真实联系信息。
 - `CONSENSUS_PROVIDER_URL`：可选；默认使用 Nasdaq analyst forecast API，
   当前接入 EPS 一致预期，不包含收入一致预期。
+- `NVDA_NEXT_EARNINGS_DATE`：NVIDIA 下一次官方财报日期；事件期权适配器会在
+  日期过期后自动失效，避免错误地把普通到期波动标成财报隐含波动。
 
 不要将 `VIBE_MCP_AUTH_TOKEN`、SSH 私钥或任何本机凭据写入源码或
 `NEXT_PUBLIC_*` 环境变量。
@@ -132,9 +138,10 @@ flowchart LR
 7. 结合用户当前仓位和风险偏好的条件化动作。
 8. 数据源账本、证据缺口与 actionability 等级。
 
-## 生产化下一步
+## 尚需授权的数据
 
 - 补充有授权的收入一致预期源，并持久化每次冻结快照。
+- 补充具备再分发权限的借券费率、利用率和可借量；在此之前做空只能是研究情景。
 - 为公司 KPI 建立可配置 schema，而不是用通用指标硬套。
 - 加入用户认证、任务队列、报告历史和审计日志。
 - 如需对外商业使用，先完成所有行情、期权、研报与门户数据的许可证核查。

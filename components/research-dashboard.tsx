@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   AnalysisProgressUpdate,
   AnalysisStageId,
@@ -119,6 +126,7 @@ function SectionTitle({
 }
 
 export function ResearchDashboard({ initialReport }: Props) {
+  const autoRunStarted = useRef(false);
   const [report, setReport] = useState(initialReport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -141,7 +149,7 @@ export function ResearchDashboard({ initialReport }: Props) {
     costBasis: undefined,
     horizon: "EVENT",
     riskTolerance: "MEDIUM",
-    dataMode: "DEMO",
+    dataMode: "OFFICIAL",
     thesis: "",
   });
 
@@ -232,8 +240,8 @@ export function ResearchDashboard({ initialReport }: Props) {
     );
   }
 
-  async function runAnalysis(event: FormEvent) {
-    event.preventDefault();
+  const runAnalysis = useCallback(async (event?: FormEvent) => {
+    event?.preventDefault();
     const startedAt = Date.now();
     setLoading(true);
     setError("");
@@ -294,7 +302,19 @@ export function ResearchDashboard({ initialReport }: Props) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [request]);
+
+  useEffect(() => {
+    if (
+      health.state !== "ready" ||
+      autoRunStarted.current ||
+      loading
+    ) {
+      return;
+    }
+    autoRunStarted.current = true;
+    void runAnalysis();
+  }, [health.state, loading, runAnalysis]);
 
   return (
     <main className="app-shell">
@@ -1054,7 +1074,13 @@ export function ResearchDashboard({ initialReport }: Props) {
               </div>
             </div>
             <div className="gap-list">
-              <span>仍需补齐</span>
+              <span>
+                {report.meta.isDemo
+                  ? "演示模式说明"
+                  : report.evidenceGaps.length > 0
+                    ? "受限项 / 未补齐"
+                    : "证据完整"}
+              </span>
               {report.evidenceGaps.map((gap, index) => (
                 <p key={gap}>
                   <b>{String(index + 1).padStart(2, "0")}</b>

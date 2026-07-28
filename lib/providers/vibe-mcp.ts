@@ -129,11 +129,25 @@ export async function callVibeTool(
     .join("\n");
 
   if (!text) return result.data?.result || null;
+  let parsed: unknown;
   try {
-    return JSON.parse(text);
+    parsed = JSON.parse(text);
   } catch {
     return text;
   }
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    "ok" in parsed &&
+    parsed.ok === false
+  ) {
+    throw new Error(
+      "error" in parsed && typeof parsed.error === "string"
+        ? parsed.error
+        : `${name} returned ok=false`,
+    );
+  }
+  return parsed;
 }
 
 export async function probeVibeMcp(): Promise<SourceRecord> {
