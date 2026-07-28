@@ -9,7 +9,7 @@ export function inferMarket(
 ): Exclude<Market, "AUTO"> {
   if (requested !== "AUTO") return requested;
   const value = symbol.trim().toUpperCase();
-  if (/^(SH|SZ|BJ)?\d{6}$/.test(value)) return "CN";
+  if (/^(SH|SZ|BJ)?\d{6}(\.(SH|SZ|BJ|CN))?$/.test(value)) return "CN";
   if (/^\d{4,5}(\.HK)?$/.test(value)) return "HK";
   return "US";
 }

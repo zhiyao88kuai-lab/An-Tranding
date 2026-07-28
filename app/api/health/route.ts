@@ -78,6 +78,7 @@ export async function GET() {
       publicResearchReady,
       privateEnrichmentReady,
       liveAnalysisImplemented,
+      cnLiveAnalysisImplemented: true,
       liveReady,
     },
     disclosure: privateEnrichmentReady

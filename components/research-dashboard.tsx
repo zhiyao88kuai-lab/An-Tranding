@@ -181,13 +181,29 @@ export function ResearchDashboard({ initialReport }: Props) {
   const evidenceReadiness =
     report.meta.evidenceReadiness ||
     (report.meta.liveDataReady ? "complete" : "insufficient");
+  const isCnRequest =
+    request.market === "CN" ||
+    (request.market === "AUTO" &&
+      /^(?:SH|SZ|BJ)?\d{6}(?:\.(?:SH|SZ|BJ|CN))?$/i.test(
+        request.symbol.trim(),
+      ));
   const selectedModeReady =
-    request.dataMode === "LOCAL_RESEARCH"
-      ? health.privateReady
-      : health.liveReady;
+    request.dataMode === "DEMO"
+      ? false
+      : isCnRequest
+        ? true
+        : request.dataMode === "LOCAL_RESEARCH"
+          ? health.privateReady
+          : health.liveReady;
   const selectedModeDisclosure =
     request.dataMode === "DEMO"
       ? "演示模式不会请求当前行情或实时一致预期；输出仅用于查看系统结构。"
+      : isCnRequest
+        ? request.dataMode === "LOCAL_RESEARCH"
+          ? health.privateReady
+            ? "A 股公开取数与 dev0 私有交叉验证均已配置；提交后会按代码现场抓取腾讯行情、新浪财务、同花顺机构预期及交易所事件。"
+            : "A 股公开取数主链已配置且不依赖预制个股数据；dev0 私有 MCP 未连接时仍会完成公开分析，并把私有增强项单独标记。"
+          : "A 股按代码现场取数：腾讯行情、新浪财务、同花顺机构预期与交易所事件会在本次任务中逐项验证，不需要提前准备个股数据。"
       : request.dataMode === "LOCAL_RESEARCH"
         ? health.privateReady
           ? "本机实施链路已就绪：SSH 隧道、dev0 MCP 与 EPS 一致预期均可达；仍会按证据完整性决定是否输出方向。"
@@ -633,6 +649,8 @@ export function ResearchDashboard({ initialReport }: Props) {
               <strong>
                 {request.dataMode === "DEMO"
                   ? "非实时"
+                  : isCnRequest
+                    ? "A 股现场取数已配置"
                   : selectedModeReady
                     ? "实施链路已就绪"
                     : "实施链路未就绪"}

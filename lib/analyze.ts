@@ -3,6 +3,7 @@ import {
   makeGenericUsLiveReport,
   makePartialUsLiveReport,
 } from "./generic-live-report";
+import { makeCnLiveReport } from "./cn-live-report";
 import { makeNvdaLiveScreenReport } from "./live-report";
 import {
   fetchNasdaqMarketSnapshot,
@@ -21,6 +22,10 @@ import {
   fetchUsCompanyEvidence,
   type UsCompanyEvidence,
 } from "./providers/us-company-evidence";
+import {
+  fetchCnCompanyEvidence,
+  type CnCompanyEvidence,
+} from "./providers/cn-company-evidence";
 import {
   fetchVibeMarketSnapshot,
   probeVibeCompanyEvidence,
@@ -96,6 +101,7 @@ export async function analyzeEquity(
   let marketSnapshot: MarketSnapshot | undefined;
   let officialSnapshot: NvdaOfficialSnapshot | undefined;
   let companyEvidence: UsCompanyEvidence | undefined;
+  let cnEvidence: CnCompanyEvidence | undefined;
   let positioning: NvdaPositioningSnapshot | undefined;
 
   reportProgress({
@@ -116,12 +122,59 @@ export async function analyzeEquity(
       detail: "连接结果会写入证据账本；失败不会回填伪数据。",
     });
     const [official, vibe] = await Promise.all([
-      probeOfficialSource(input.symbol, market),
+      market === "CN"
+        ? Promise.resolve<SourceRecord | null>(null)
+        : probeOfficialSource(input.symbol, market),
       probeVibeMcp(input.symbol),
     ]);
-    sources.push(official, vibe);
+    if (official) {
+      sources.push(official);
+    }
+    sources.push(vibe);
 
-    if (market === "US") {
+    if (market === "CN") {
+      const crossCheckPromise =
+        input.dataMode === "LOCAL_RESEARCH"
+          ? probeVibeCompanyEvidence(input.symbol, "CN")
+          : Promise.resolve<SourceRecord>({
+              name: "vibe_trading_dev0 A 股财务交叉验证",
+              provider: "SSH tunnel + HTTP MCP",
+              status: "restricted",
+              asOf: new Date().toISOString(),
+              tier: "LOCAL",
+              note: "公开部署不访问本机 SSH 隧道；A 股公开取数主链不依赖 dev0。",
+            });
+      const [cnResult, crossCheckResult] = await Promise.allSettled([
+        fetchCnCompanyEvidence(input.symbol, (message, detail) => {
+          reportProgress({
+            stage: "sources",
+            status: "running",
+            message,
+            detail,
+          });
+        }),
+        crossCheckPromise,
+      ]);
+      if (cnResult.status === "fulfilled") {
+        cnEvidence = cnResult.value;
+        sources.push(...cnEvidence.sources);
+      } else {
+        sources.push({
+          name: "A 股现场取数工作流",
+          provider: "Tencent / Sina / THS / exchange · a-stock-data",
+          status: "missing",
+          asOf: new Date().toISOString(),
+          tier: "A",
+          note:
+            cnResult.reason instanceof Error
+              ? cnResult.reason.message
+              : "A 股现场取数失败",
+        });
+      }
+      if (crossCheckResult.status === "fulfilled") {
+        sources.push(crossCheckResult.value);
+      }
+    } else if (market === "US") {
       const marketPromise =
         input.dataMode === "LOCAL_RESEARCH"
           ? fetchVibeMarketSnapshot(input.symbol).catch(async () => {
@@ -273,6 +326,42 @@ export async function analyzeEquity(
       detail: "Bull / Base / Bear 概率合计 100%。",
     });
     return report;
+  }
+
+  if (
+    market === "CN" &&
+    input.dataMode !== "DEMO" &&
+    cnEvidence &&
+    (cnEvidence.market || cnEvidence.financials || cnEvidence.consensus)
+  ) {
+    const coreComplete = Boolean(
+      cnEvidence.market && cnEvidence.financials && cnEvidence.consensus,
+    );
+    reportProgress({
+      stage: "evidence",
+      status: coreComplete ? "done" : "warning",
+      message: coreComplete
+        ? `${cnEvidence.company} 的行情、财务与机构预期已冻结`
+        : `${cnEvidence.company} 已完成部分 A 股实时证据分析`,
+      detail: `${cnEvidence.financials?.periods.length || 0} 个单季财务序列；${
+        cnEvidence.consensus?.periods.length || 0
+      } 个机构预测年度；${
+        cnEvidence.events?.nextReportDate
+          ? `下一预约披露日 ${cnEvidence.events.nextReportDate}`
+          : "下一预约披露日待补"
+      }。`,
+    });
+    reportProgress({
+      stage: "scenarios",
+      status:
+        cnEvidence.market && cnEvidence.consensus ? "done" : "warning",
+      message: "已完成 A 股 KPI、毛利率争议与 Bull / Base / Bear 情景",
+      detail:
+        cnEvidence.market && cnEvidence.consensus
+          ? "目标价由机构 EPS 均值与显式 P/E 假设计算；操作结论同时受仓位、融券与事件风险约束。"
+          : "缺失行情或机构预期时不计算伪精确目标价，方向保持 WAIT。",
+    });
+    return makeCnLiveReport(input, cnEvidence, sources);
   }
 
   if (
