@@ -12,7 +12,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const deploymentHost =
+  process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL;
+
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    deploymentHost ? `https://${deploymentHost}` : "http://localhost:3000",
+  ),
   title: {
     default: "SignalForge · 财报前研究决策台",
     template: "%s · SignalForge",
@@ -49,4 +55,3 @@ export default function RootLayout({
     </html>
   );
 }
-

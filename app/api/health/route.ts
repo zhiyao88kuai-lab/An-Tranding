@@ -1,6 +1,7 @@
 import { probeVibeMcp } from "../../../lib/providers/vibe-mcp";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const vibe = process.env.VIBE_MCP_URL

@@ -1,32 +1,67 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import { after, before, test } from "node:test";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { resolve } from "node:path";
 
-const workerUrl = new URL(
-  `../dist/server/index.js?test=${process.pid}-${Date.now()}`,
-  import.meta.url,
-);
-const { default: worker } = await import(workerUrl.href);
+const port = 32_000 + (process.pid % 10_000);
+const origin = `http://127.0.0.1:${port}`;
+const projectRoot = resolve(import.meta.dirname, "..");
+let server;
+let serverLogs = "";
 
-const env = {
-  ASSETS: {
-    fetch: async () => new Response("Not found", { status: 404 }),
+async function waitForServer() {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if (server.exitCode !== null) {
+      throw new Error(`Next.js exited before startup:\n${serverLogs}`);
+    }
+    try {
+      const response = await fetch(`${origin}/api/health`);
+      if (response.ok) return;
+    } catch {
+      // Server is still starting.
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
+  }
+  throw new Error(`Timed out waiting for Next.js:\n${serverLogs}`);
+}
+
+before(
+  async () => {
+    server = spawn(
+      process.execPath,
+      ["node_modules/next/dist/bin/next", "start", "-p", String(port)],
+      {
+        cwd: projectRoot,
+        env: { ...process.env, NEXT_TELEMETRY_DISABLED: "1" },
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
+    server.stdout.on("data", (chunk) => {
+      serverLogs += chunk;
+    });
+    server.stderr.on("data", (chunk) => {
+      serverLogs += chunk;
+    });
+    await waitForServer();
   },
-};
+  { timeout: 35_000 },
+);
 
-const ctx = {
-  waitUntil() {},
-  passThroughOnException() {},
-};
+after(async () => {
+  if (!server || server.exitCode !== null) return;
+  server.kill("SIGTERM");
+  await Promise.race([
+    once(server, "exit"),
+    new Promise((resolveDelay) => setTimeout(resolveDelay, 5_000)),
+  ]);
+});
 
 test("server-renders the finished research cockpit", async () => {
-  const response = await worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    env,
-    ctx,
-  );
-
+  const response = await fetch(origin, {
+    headers: { accept: "text/html" },
+  });
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
@@ -40,23 +75,19 @@ test("server-renders the finished research cockpit", async () => {
 });
 
 test("analysis API applies position-aware risk guidance", async () => {
-  const response = await worker.fetch(
-    new Request("http://localhost/api/analyze", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        symbol: "NVDA",
-        market: "AUTO",
-        positionSide: "LONG",
-        positionWeight: 14,
-        horizon: "EVENT",
-        riskTolerance: "LOW",
-        dataMode: "DEMO",
-      }),
+  const response = await fetch(`${origin}/api/analyze`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      symbol: "NVDA",
+      market: "AUTO",
+      positionSide: "LONG",
+      positionWeight: 14,
+      horizon: "EVENT",
+      riskTolerance: "LOW",
+      dataMode: "DEMO",
     }),
-    env,
-    ctx,
-  );
+  });
 
   assert.equal(response.status, 200);
   const report = await response.json();
@@ -70,23 +101,19 @@ test("analysis API applies position-aware risk guidance", async () => {
 });
 
 test("unknown symbols fail closed to WAIT when evidence is missing", async () => {
-  const response = await worker.fetch(
-    new Request("http://localhost/api/analyze", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        symbol: "AAPL",
-        market: "US",
-        positionSide: "NONE",
-        positionWeight: 0,
-        horizon: "EVENT",
-        riskTolerance: "MEDIUM",
-        dataMode: "DEMO",
-      }),
+  const response = await fetch(`${origin}/api/analyze`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      symbol: "AAPL",
+      market: "US",
+      positionSide: "NONE",
+      positionWeight: 0,
+      horizon: "EVENT",
+      riskTolerance: "MEDIUM",
+      dataMode: "DEMO",
     }),
-    env,
-    ctx,
-  );
+  });
 
   assert.equal(response.status, 200);
   const report = await response.json();
@@ -96,23 +123,19 @@ test("unknown symbols fail closed to WAIT when evidence is missing", async () =>
 });
 
 test("streaming API exposes honest backend progress", async () => {
-  const response = await worker.fetch(
-    new Request("http://localhost/api/analyze/stream", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        symbol: "NVDA",
-        market: "AUTO",
-        positionSide: "NONE",
-        positionWeight: 0,
-        horizon: "EVENT",
-        riskTolerance: "MEDIUM",
-        dataMode: "DEMO",
-      }),
+  const response = await fetch(`${origin}/api/analyze/stream`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      symbol: "NVDA",
+      market: "AUTO",
+      positionSide: "NONE",
+      positionWeight: 0,
+      horizon: "EVENT",
+      riskTolerance: "MEDIUM",
+      dataMode: "DEMO",
     }),
-    env,
-    ctx,
-  );
+  });
 
   assert.equal(response.status, 200);
   assert.match(
@@ -134,11 +157,7 @@ test("streaming API exposes honest backend progress", async () => {
 });
 
 test("health endpoint does not overstate realtime capability", async () => {
-  const response = await worker.fetch(
-    new Request("http://localhost/api/health"),
-    env,
-    ctx,
-  );
+  const response = await fetch(`${origin}/api/health`);
   assert.equal(response.status, 200);
   const health = await response.json();
   assert.equal(health.capabilities.liveReady, false);

@@ -1,7 +1,9 @@
 import { analyzeEquity, validateRequest } from "../../../../lib/analyze";
 import type { AnalysisProgressUpdate } from "../../../../lib/types";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 type StreamEvent =
   | { type: "progress"; update: AnalysisProgressUpdate }
@@ -68,4 +70,3 @@ export async function POST(request: Request) {
     },
   });
 }
-

@@ -15,7 +15,7 @@ SignalForge 是一个可运行的一键财报前研究系统：前端收集股�
 
 ## 本地启动
 
-要求 Node.js `>=22.13.0`。
+要求 Node.js `24.x`。
 
 ```bash
 cp .env.example .env.local
@@ -28,6 +28,35 @@ npm run dev
 - `POST /api/analyze`：生成结构化报告。
 - `POST /api/analyze/stream`：以 NDJSON 推送分析阶段与最终报告。
 - `GET /api/health`：检查服务与 `vibe_trading_dev0` 连接状态。
+
+## Vercel 部署
+
+项目使用标准 Next.js 构建，可直接部署到 Vercel：
+
+```bash
+npx vercel@latest deploy --prod
+```
+
+当前生产地址：
+[`https://signalforge-equity-cockpit.vercel.app`](https://signalforge-equity-cockpit.vercel.app)。
+项目级 SSO 部署保护应保持关闭，确保页面可公开访问。
+
+部分中国大陆网络会直接重置 `*.vercel.app` 连接。若出现
+`ERR_CONNECTION_RESET`，应给项目绑定自有域名；这属于域名/网络可达性问题，
+不是 Next.js 应用或 API 故障。
+
+公网环境默认保持 `DEMO`，不配置 `VIBE_MCP_URL`。Vercel 无法访问本机
+`127.0.0.1` 上的 SSH 隧道；需要私有数据时，应在本机运行系统，或另行部署带身份认证、
+访问控制和只读工具白名单的私有 MCP 网关。
+
+可在 Vercel 中设置以下服务端环境变量：
+
+- `DATA_MODE=DEMO`：安全默认值。
+- `SEC_USER_AGENT`：仅在启用官方 SEC 连接探测时设置真实联系信息。
+- `CONSENSUS_PROVIDER_URL`：预留的一致预期服务地址；当前未完成生产接入。
+
+不要将 `VIBE_MCP_AUTH_TOKEN`、SSH 私钥或任何本机凭据写入源码或
+`NEXT_PUBLIC_*` 环境变量。
 
 ## 最安全的 dev0 连接
 
