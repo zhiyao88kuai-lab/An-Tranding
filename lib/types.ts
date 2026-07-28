@@ -74,6 +74,8 @@ export interface ResearchReport {
     dataMode: DataMode;
     workflow: string[];
     isDemo: boolean;
+    liveDataReady: boolean;
+    dataDisclosure: string;
   };
   decision: {
     side: DecisionSide;
@@ -122,3 +124,17 @@ export interface ResearchReport {
   disclaimer: string;
 }
 
+export type AnalysisStageId =
+  | "request"
+  | "route"
+  | "sources"
+  | "evidence"
+  | "scenarios"
+  | "complete";
+
+export interface AnalysisProgressUpdate {
+  stage: AnalysisStageId;
+  status: "running" | "done" | "skipped" | "warning";
+  message: string;
+  detail?: string;
+}

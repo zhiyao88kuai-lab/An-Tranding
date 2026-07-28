@@ -1,7 +1,9 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type {
+  AnalysisProgressUpdate,
+  AnalysisStageId,
   AnalysisRequest,
   DataMode,
   DecisionSide,
@@ -15,6 +17,26 @@ import type {
 type Props = {
   initialReport: ResearchReport;
 };
+
+type HealthState = {
+  state: "checking" | "ready" | "limited" | "error";
+  liveReady: boolean;
+  disclosure: string;
+};
+
+type StreamEvent =
+  | { type: "progress"; update: AnalysisProgressUpdate }
+  | { type: "complete"; report: ResearchReport }
+  | { type: "error"; message: string };
+
+const analysisStages: Array<{ id: AnalysisStageId; label: string }> = [
+  { id: "request", label: "校验请求" },
+  { id: "route", label: "市场路由" },
+  { id: "sources", label: "连接数据源" },
+  { id: "evidence", label: "证据门槛" },
+  { id: "scenarios", label: "情景与仓位" },
+  { id: "complete", label: "生成报告" },
+];
 
 const marketOptions: Array<{ value: Market; label: string }> = [
   { value: "AUTO", label: "自动识别" },
@@ -100,6 +122,16 @@ export function ResearchDashboard({ initialReport }: Props) {
   const [report, setReport] = useState(initialReport);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [runSymbol, setRunSymbol] = useState("");
+  const [progress, setProgress] = useState<
+    Partial<Record<AnalysisStageId, AnalysisProgressUpdate>>
+  >({});
+  const [health, setHealth] = useState<HealthState>({
+    state: "checking",
+    liveReady: false,
+    disclosure: "正在检查实时数据链路…",
+  });
   const [request, setRequest] = useState<AnalysisRequest>({
     symbol: "NVDA",
     companyName: "NVIDIA",
@@ -125,6 +157,61 @@ export function ResearchDashboard({ initialReport }: Props) {
   const generatedAtLabel = `${report.meta.generatedAt
     .replace("T", " ")
     .slice(0, 19)} UTC`;
+  const progressPercent = Math.round(
+    (Object.keys(progress).length / analysisStages.length) * 100,
+  );
+  const selectedModeDisclosure =
+    request.dataMode === "DEMO"
+      ? "演示模式不会请求当前行情或实时一致预期；输出仅用于查看系统结构。"
+      : request.dataMode === "LOCAL_RESEARCH"
+        ? health.liveReady
+          ? "本机实时链路已就绪；系统仍会按证据完整性决定是否输出方向。"
+          : "当前只验证本机 SSH 隧道与 MCP 是否可达，尚不会据此生成实时一致预期；结果会保持演示或降级为 WAIT。"
+        : "当前只验证官方源与 dev0 MCP 的连接证据；尚未接入实时一致预期，不会生成可交易目标价。";
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/health", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("健康检查失败");
+        return (await response.json()) as {
+          capabilities?: { liveReady?: boolean };
+          disclosure?: string;
+        };
+      })
+      .then((payload) => {
+        if (!active) return;
+        const liveReady = Boolean(payload.capabilities?.liveReady);
+        setHealth({
+          state: liveReady ? "ready" : "limited",
+          liveReady,
+          disclosure:
+            payload.disclosure ||
+            (liveReady ? "实时链路已就绪。" : "实时链路未就绪。"),
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+        setHealth({
+          state: "error",
+          liveReady: false,
+          disclosure: "无法确认实时数据链路，系统将按非实时模式处理。",
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!loading) return;
+    const startedAt = Date.now();
+    const timer = window.setInterval(
+      () => setElapsedMs(Date.now() - startedAt),
+      100,
+    );
+    return () => window.clearInterval(timer);
+  }, [loading]);
 
   function update<K extends keyof AnalysisRequest>(
     key: K,
@@ -135,21 +222,61 @@ export function ResearchDashboard({ initialReport }: Props) {
 
   async function runAnalysis(event: FormEvent) {
     event.preventDefault();
+    const startedAt = Date.now();
     setLoading(true);
     setError("");
+    setElapsedMs(0);
+    setRunSymbol(request.symbol.trim().toUpperCase());
+    setProgress({});
     try {
-      const response = await fetch("/api/analyze", {
+      const response = await fetch("/api/analyze/stream", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(request),
       });
-      const payload = (await response.json()) as
-        | ResearchReport
-        | { error: string };
-      if (!response.ok || "error" in payload) {
-        throw new Error("error" in payload ? payload.error : "分析失败");
+      if (!response.ok) {
+        const payload = (await response.json()) as { error?: string };
+        throw new Error(payload.error || "分析失败");
       }
-      setReport(payload);
+      if (!response.body) {
+        throw new Error("浏览器不支持流式分析状态");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let completedReport: ResearchReport | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const eventPayload = JSON.parse(line) as StreamEvent;
+          if (eventPayload.type === "progress") {
+            setProgress((current) => ({
+              ...current,
+              [eventPayload.update.stage]: eventPayload.update,
+            }));
+          } else if (eventPayload.type === "complete") {
+            completedReport = eventPayload.report;
+          } else if (eventPayload.type === "error") {
+            throw new Error(eventPayload.message);
+          }
+        }
+        if (done) break;
+      }
+
+      if (!completedReport) {
+        throw new Error("分析完成，但未收到报告");
+      }
+      const remaining = Math.max(0, 900 - (Date.now() - startedAt));
+      if (remaining > 0) {
+        await new Promise((resolve) => window.setTimeout(resolve, remaining));
+      }
+      setReport(completedReport);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "分析任务失败");
     } finally {
@@ -172,7 +299,16 @@ export function ResearchDashboard({ initialReport }: Props) {
           </span>
         </a>
         <nav aria-label="产品状态">
-          <span className="status-dot">研究引擎在线</span>
+          <span
+            className={`status-dot ${health.state}`}
+            title={health.disclosure}
+          >
+            {health.state === "checking"
+              ? "正在检测数据源"
+              : health.liveReady
+                ? "实时分析链路已就绪"
+                : "实时分析未连接"}
+          </span>
           <span className="topbar-divider" />
           <span>只读 · 不自动下单</span>
         </nav>
@@ -377,19 +513,46 @@ export function ResearchDashboard({ initialReport }: Props) {
                   update("dataMode", event.target.value as DataMode)
                 }
               >
-                <option value="DEMO">演示数据（无需连接）</option>
-                <option value="OFFICIAL">官方优先 + MCP 探测</option>
+                <option value="DEMO">演示报告（不获取实时数据）</option>
+                <option value="OFFICIAL">
+                  数据源连通性检查（不足则 WAIT）
+                </option>
                 <option value="LOCAL_RESEARCH">
-                  本地研究（含许可受限数据）
+                  本机 MCP 连接测试（仅本地）
                 </option>
               </select>
             </label>
 
+            <div
+              className={`mode-disclosure ${
+                request.dataMode === "DEMO" || !health.liveReady
+                  ? "limited"
+                  : "ready"
+              }`}
+            >
+              <strong>
+                {request.dataMode === "DEMO"
+                  ? "非实时"
+                  : health.liveReady
+                    ? "实时链路可用"
+                    : "实时链路未就绪"}
+              </strong>
+              <p>{selectedModeDisclosure}</p>
+            </div>
+
             {error ? <div className="form-error">{error}</div> : null}
 
             <button className="run-button" type="submit" disabled={loading}>
-              <span>{loading ? "正在冻结证据…" : "生成财报前决策报告"}</span>
-              <b>{loading ? "···" : "→"}</b>
+              <span>
+                {loading
+                  ? `正在分析 ${runSymbol} · ${(elapsedMs / 1000).toFixed(1)}s`
+                  : request.dataMode === "DEMO"
+                    ? "生成演示报告"
+                    : "运行数据源验证分析"}
+              </span>
+              <b className={loading ? "button-spinner" : ""}>
+                {loading ? "◌" : "→"}
+              </b>
             </button>
             <p className="form-footnote">
               系统只生成研究与风险建议，不连接券商、不自动下单。
@@ -397,7 +560,81 @@ export function ResearchDashboard({ initialReport }: Props) {
           </form>
         </aside>
 
-        <div className="report-column">
+        <div className={`report-column ${loading ? "is-running" : ""}`}>
+          {loading ? (
+            <section
+              className="progress-panel"
+              aria-live="polite"
+              aria-label="分析进度"
+            >
+              <header>
+                <div>
+                  <span>LIVE TASK STATUS</span>
+                  <h2>正在分析 {runSymbol}</h2>
+                  <p>
+                    后端正在逐步返回真实状态；演示模式会明确跳过实时数据源。
+                  </p>
+                </div>
+                <strong>{(elapsedMs / 1000).toFixed(1)}s</strong>
+              </header>
+              <div className="progress-track">
+                <i style={{ width: `${progressPercent}%` }} />
+              </div>
+              <div className="progress-steps">
+                {analysisStages.map((stage, index) => {
+                  const updateState = progress[stage.id];
+                  return (
+                    <article
+                      key={stage.id}
+                      className={updateState?.status || "pending"}
+                    >
+                      <span>
+                        {updateState?.status === "done"
+                          ? "✓"
+                          : updateState?.status === "warning"
+                            ? "!"
+                            : updateState?.status === "skipped"
+                              ? "—"
+                              : updateState?.status === "running"
+                                ? "◌"
+                                : String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <strong>{stage.label}</strong>
+                        <p>{updateState?.message || "等待上一阶段"}</p>
+                        {updateState?.detail ? (
+                          <small>{updateState.detail}</small>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          <section
+            className={`report-disclosure ${
+              report.meta.liveDataReady ? "ready" : "limited"
+            }`}
+            aria-live="polite"
+          >
+            <strong>
+              {loading
+                ? "以下为上一次报告"
+                : report.meta.isDemo
+                  ? "演示报告 · 非实时 · 不可据此交易"
+                  : report.meta.liveDataReady
+                    ? "实时证据报告"
+                    : "实时证据不完整 · 已降级"}
+            </strong>
+            <p>
+              {loading
+                ? `新的 ${runSymbol} 分析仍在进行，完成前不会覆盖当前内容。`
+                : report.meta.dataDisclosure}
+            </p>
+          </section>
+
           <section className={`decision-card decision-${report.decision.side}`}>
             <div className="decision-head">
               <div>

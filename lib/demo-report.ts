@@ -39,6 +39,9 @@ export function makeNvdaDemoReport(
         "Portfolio Risk",
       ],
       isDemo: true,
+      liveDataReady: false,
+      dataDisclosure:
+        "演示报告：未获取实时股价、实时一致预期、期权或借券数据。",
     },
     decision: {
       side: "LONG",
@@ -339,6 +342,9 @@ export function makeConditionalReport(
   report.meta.market =
     input.market === "AUTO" ? "待自动识别" : input.market;
   report.meta.isDemo = false;
+  report.meta.liveDataReady = false;
+  report.meta.dataDisclosure =
+    "已尝试连接数据源，但关键实时证据不完整；系统已强制降级为 WAIT。";
   report.meta.asOf = "连接结果 · 证据不完整";
   report.decision = {
     side: "WAIT",
@@ -399,4 +405,3 @@ export function makeConditionalReport(
   report.evidenceGaps = gaps;
   return report;
 }
-
